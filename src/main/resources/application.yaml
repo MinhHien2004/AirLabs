@@ -3,10 +3,10 @@ server:
 
 spring:
   datasource:
-    # Thay đổi thông tin DB của bạn ở đây
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
-    password: 123456
+    # Thay đổi thông tin DB của bạn ở đây (hoặc dùng environment variables)
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
   
   jpa:
@@ -28,8 +28,8 @@ airlabs.api:
   api-key: 1ffd3d4c-1ea9-4b6c-8f0e-2250ad010506
 
 spring.data.redis:
-  host: localhost
-  port: 6379
+  host: ${SPRING_REDIS_HOST:localhost}
+  port: ${SPRING_REDIS_PORT:6379}
   timeout: 60000ms
   jedis:
     pool:

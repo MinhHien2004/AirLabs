@@ -1,0 +1,39 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    # Thay đổi thông tin DB của bạn ở đây
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    # Tự động cập nhật schema (tạo bảng/cột mới nếu chưa có)
+    hibernate:
+      ddl-auto: update  
+    
+    # Hiển thị câu lệnh SQL trong console để dễ debug
+    show-sql: true
+    
+    # Cấu hình Dialect cho PostgreSQL
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true # Format SQL cho dễ đọc hơn
+
+airlabs.api:
+  base-url: https://airlabs.co/api/v9
+  api-key: 1ffd3d4c-1ea9-4b6c-8f0e-2250ad010506
+
+spring.data.redis:
+  host: localhost
+  port: 6379
+  timeout: 60000ms
+  jedis:
+    pool:
+      max-active: 10
+      max-idle: 5
+      min-idle: 1
+      max-wait: 2000ms 

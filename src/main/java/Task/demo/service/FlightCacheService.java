@@ -20,33 +20,57 @@ public class FlightCacheService {
 
     // Lưu arrivals vào cache
     public void cacheArrivals(String iata, List<Flight> flights) {
-        String key = ARRIVALS_PREFIX + iata;
-        redisTemplate.opsForValue().set(key, flights, CACHE_EXPIRATION, TimeUnit.MINUTES);
+        try {
+            String key = ARRIVALS_PREFIX + iata;
+            redisTemplate.opsForValue().set(key, flights, CACHE_EXPIRATION, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            System.err.println("Redis cache error (arrivals): " + e.getMessage());
+            // Continue without caching
+        }
     }
 
     // Lưu departures vào cache
     public void cacheDepartures(String iata, List<Flight> flights) {
-        String key = DEPARTURES_PREFIX + iata;
-        redisTemplate.opsForValue().set(key, flights, CACHE_EXPIRATION, TimeUnit.MINUTES);
+        try {
+            String key = DEPARTURES_PREFIX + iata;
+            redisTemplate.opsForValue().set(key, flights, CACHE_EXPIRATION, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            System.err.println("Redis cache error (departures): " + e.getMessage());
+            // Continue without caching
+        }
     }
 
     // Lấy arrivals từ cache
     @SuppressWarnings("unchecked")
     public List<Flight> getArrivalsFromCache(String iata) {
-        String key = ARRIVALS_PREFIX + iata;
-        return (List<Flight>) redisTemplate.opsForValue().get(key);
+        try {
+            String key = ARRIVALS_PREFIX + iata;
+            return (List<Flight>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            System.err.println("Redis get error (arrivals): " + e.getMessage());
+            return null;
+        }
     }
 
     // Lấy departures từ cache
     @SuppressWarnings("unchecked")
     public List<Flight> getDeparturesFromCache(String iata) {
-        String key = DEPARTURES_PREFIX + iata;
-        return (List<Flight>) redisTemplate.opsForValue().get(key);
+        try {
+            String key = DEPARTURES_PREFIX + iata;
+            return (List<Flight>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            System.err.println("Redis get error (departures): " + e.getMessage());
+            return null;
+        }
     }
 
     // Xóa cache khi thay đổi IATA
     public void clearCache(String iata) {
-        redisTemplate.delete(ARRIVALS_PREFIX + iata);
-        redisTemplate.delete(DEPARTURES_PREFIX + iata);
+        try {
+            redisTemplate.delete(ARRIVALS_PREFIX + iata);
+            redisTemplate.delete(DEPARTURES_PREFIX + iata);
+        } catch (Exception e) {
+            System.err.println("Redis delete error: " + e.getMessage());
+        }
     }
 }

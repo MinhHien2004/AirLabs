@@ -35,6 +35,8 @@ spring.data.redis:
   host: ${SPRING_REDIS_HOST:real-adder-15816.upstash.io}
   port: ${SPRING_REDIS_PORT:6379}
   password: ${SPRING_REDIS_PASSWORD:Aj3IAAIgcDIn2LUGxqf1ldug7uPrRZpWXvbU7ACP_cjk8IP3j6_EBg}
+  ssl: 
+    enabled: true
   timeout: 60000ms
   # Cho phép app khởi động ngay cả khi Redis không kết nối được
   jedis:

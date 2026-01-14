@@ -4,9 +4,13 @@ server:
 spring:
   datasource:
     # Thay đổi thông tin DB của bạn ở đây (hoặc dùng environment variables)
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dpg-d5j0ijnpm1nc73fj5cf0-a.singapore-postgres.render.com:5432/airlabs_db}
+    #postgresql: //postgresql://postgres1:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9@dpg-d5j0ijnpm1nc73fj5cf0-a.singapore-postgres.render.com/airlabs_db
+    username: ${SPRING_DATASOURCE_USERNAME:postgres1}
+    password: ${SPRING_DATASOURCE_PASSWORD:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9}
+    # url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    # username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    # password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
   
   jpa:
@@ -31,9 +35,16 @@ spring.data.redis:
   host: ${SPRING_REDIS_HOST:localhost}
   port: ${SPRING_REDIS_PORT:6379}
   timeout: 60000ms
+  # Cho phép app khởi động ngay cả khi Redis không kết nối được
   jedis:
     pool:
       max-active: 10
       max-idle: 5
       min-idle: 1
-      max-wait: 2000ms 
+      max-wait: 2000ms
+
+# Disable Redis health check để không bắt buộc phải có Redis
+management:
+  health:
+    redis:
+      enabled: false 

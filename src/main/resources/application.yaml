@@ -4,8 +4,8 @@ server:
 spring:
   datasource:
     # Thay đổi thông tin DB của bạn ở đây (hoặc dùng environment variables)
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dpg-d5j0ijnpm1nc73fj5cf0-a.singapore-postgres.render.com:5432/airlabs_db}
-    #postgresql: //postgresql://postgres1:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9@dpg-d5j0ijnpm1nc73fj5cf0-a.singapore-postgres.render.com/airlabs_db
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dpg-d5j0ijnpm1nc73fj5cf0-a:5432/airlabs_db}
+    #postgresql: //postgresql://postgres1:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9@dpg-d5j0ijnpm1nc73fj5cf0-a/airlabs_db
     username: ${SPRING_DATASOURCE_USERNAME:postgres1}
     password: ${SPRING_DATASOURCE_PASSWORD:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9}
     # url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}

@@ -34,7 +34,7 @@ airlabs.api:
 spring.data.redis:
   host: ${SPRING_REDIS_HOST:real-adder-15816.upstash.io}
   port: ${SPRING_REDIS_PORT:6379}
-  password: ${SPRING_REDIS_PASSWORD:Aj3IAAIgcDIn2LUGxqf1ldug7uPrRZpWXvbU7ACP_cjk8IP3j6_EBg}
+  password: ${SPRING_REDIS_PASSWORD:AT3IAAIncDI5YWUxYzFhODU5OTA0ZjJkOTA5M2RkNjJmNWIwOWMzOXAyMTU4MTY}
   ssl: 
     enabled: true
   timeout: 60000ms

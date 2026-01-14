@@ -32,8 +32,9 @@ airlabs.api:
   api-key: 1ffd3d4c-1ea9-4b6c-8f0e-2250ad010506
 
 spring.data.redis:
-  host: ${SPRING_REDIS_HOST:localhost}
+  host: ${SPRING_REDIS_HOST:real-adder-15816.upstash.io}
   port: ${SPRING_REDIS_PORT:6379}
+  password: ${SPRING_REDIS_PASSWORD:Aj3IAAIgcDIn2LUGxqf1ldug7uPrRZpWXvbU7ACP_cjk8IP3j6_EBg}
   timeout: 60000ms
   # Cho phép app khởi động ngay cả khi Redis không kết nối được
   jedis:

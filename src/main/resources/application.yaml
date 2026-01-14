@@ -3,14 +3,10 @@ server:
 
 spring:
   datasource:
-    # Thay đổi thông tin DB của bạn ở đây (hoặc dùng environment variables)
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dpg-d5j0ijnpm1nc73fj5cf0-a:5432/airlabs_db}
-    #postgresql: //postgresql://postgres1:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9@dpg-d5j0ijnpm1nc73fj5cf0-a/airlabs_db
-    username: ${SPRING_DATASOURCE_USERNAME:postgres1}
-    password: ${SPRING_DATASOURCE_PASSWORD:BSU5bqRa996QgA5Hye5iSKDB2Cd1VMG9}
-    # url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
-    # username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    # password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    # SECURITY: Use environment variables for sensitive data
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   
   jpa:
@@ -28,13 +24,13 @@ spring:
         format_sql: true # Format SQL cho dễ đọc hơn
 
 airlabs.api:
-  base-url: https://airlabs.co/api/v9
-  api-key: 1ffd3d4c-1ea9-4b6c-8f0e-2250ad010506
+  base-url: ${AIRLABS_BASE_URL:https://airlabs.co/api/v9}
+  api-key: ${AIRLABS_API_KEY}
 
 spring.data.redis:
-  host: ${SPRING_REDIS_HOST:real-adder-15816.upstash.io}
+  host: ${SPRING_REDIS_HOST:localhost}
   port: ${SPRING_REDIS_PORT:6379}
-  password: ${SPRING_REDIS_PASSWORD:AT3IAAIncDI5YWUxYzFhODU5OTA0ZjJkOTA5M2RkNjJmNWIwOWMzOXAyMTU4MTY}
+  password: ${SPRING_REDIS_PASSWORD}
   ssl: 
     enabled: true
   timeout: 60000ms

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import Task.demo.Repository.FlightRepository;
+import Task.demo.config.AirLabsConfig;
 import Task.demo.dto.request.FlightCreateRequest;
 import Task.demo.dto.request.FlightUpdateRequest;
 import Task.demo.entity.Flight;
@@ -24,8 +25,8 @@ public class FlightService {
     @Autowired
     private RestTemplate restTemplate;
     
-    private static final String AIRLABS_API_URL = "https://airlabs.co/api/v9/schedules";
-    private static final String API_KEY = "1ffd3d4c-1ea9-4b6c-8f0e-2250ad010506";
+    @Autowired
+    private AirLabsConfig airLabsConfig;
 
     public List<Flight> getAllFlights(){
         return flightRepository.findAll();
@@ -275,7 +276,7 @@ public class FlightService {
     @SuppressWarnings("unchecked")
     private List<Flight> fetchArrivalsFromAPI(String iata) {
         try {
-            String url = AIRLABS_API_URL + "?arr_iata=" + iata + "&api_key=" + API_KEY;
+            String url = airLabsConfig.getBaseUrl() + "/schedules?arr_iata=" + iata + "&api_key=" + airLabsConfig.getApiKey();
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
             if (response != null && response.containsKey("response")) {
@@ -299,7 +300,7 @@ public class FlightService {
     @SuppressWarnings("unchecked")
     private List<Flight> fetchDeparturesFromAPI(String iata) {
         try {
-            String url = AIRLABS_API_URL + "?dep_iata=" + iata + "&api_key=" + API_KEY;
+            String url = airLabsConfig.getBaseUrl() + "/schedules?dep_iata=" + iata + "&api_key=" + airLabsConfig.getApiKey();
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
             if (response != null && response.containsKey("response")) {

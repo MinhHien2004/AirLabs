@@ -35,4 +35,19 @@ build/
 ### VS Code ###
 .vscode/
 
+### Environment Variables & Sensitive Data ###
+.env
+.env.local
+.env.*.local
+*.env
+application-prod.yaml
+application-production.yaml
+**/application-secrets.yaml
 
+### Logs ###
+*.log
+logs/
+
+### OS ###
+.DS_Store
+Thumbs.db

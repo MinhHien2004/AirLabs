@@ -12,6 +12,9 @@
     <div class="header">
         <input type="text" class="iata" placeholder="Press the airport iata" id="iataInput">
         <button class="refresh-btn">Refresh</button>
+        <div class="countdown-timer">
+            <span id="countdownDisplay">--:--</span>
+        </div>
     </div>
     <!-- Arrivals Board -->
     <div class="container">
@@ -77,11 +80,66 @@
         const arrivalsTitle = document.getElementById('arrivalsTitle');
         const departuresTitle = document.getElementById('departuresTitle');
         const refreshBtn = document.querySelector('.refresh-btn');
+        const countdownDisplay = document.getElementById('countdownDisplay');
         
-        // Sử dụng relative path để tự động lấy base URL từ current domain
+        // Backend API URL - Spring Boot chạy trên port 8080
+        const API_BASE_URL = 'http://localhost:8080';
+        
         const getApiUrl = (endpoint) => {
-            return `/api/schedules${endpoint}`;
+            return `${API_BASE_URL}/api/schedules${endpoint}`;
         };
+
+        let countdownInterval = null;
+        let remainingSeconds = 0;
+        const REFRESH_INTERVAL = 1 * 60; // 1 minute
+
+        function updateCountdownDisplay(){
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            countdownDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            if(remainingSeconds <= 10){
+                countdownDisplay.style.color = '#ff4444'; // Red when < 10 seconds
+            } else {
+                countdownDisplay.style.color = '#4CAF50'; // Green otherwise
+            }
+        }
+
+        function startCountdown(){
+            remainingSeconds = REFRESH_INTERVAL;
+            updateCountdownDisplay();
+
+            if(countdownInterval){
+                clearInterval(countdownInterval);
+            }
+
+            countdownInterval = setInterval(() => {
+                remainingSeconds--;
+                updateCountdownDisplay();
+
+                if(remainingSeconds <= 0){
+                    // Tự động refresh khi hết thời gian
+                    const iata = iataInput.value.toUpperCase().trim();
+                    if(iata.length === 3){
+                        fetchArrivals(iata);
+                        fetchDepartures(iata);
+                    }
+                    // Reset countdown về đầu
+                    remainingSeconds = REFRESH_INTERVAL;
+                }
+            }, 1000);
+        }
+
+        function stopCountdown(){
+            if(countdownInterval){
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            countdownDisplay.textContent = '--:--';
+            countdownDisplay.style.color = '#666';
+        }
+
+
 
         // Update titles when input changes
         iataInput.addEventListener('input', () => {
@@ -96,7 +154,7 @@
          */
         async function fetchArrivals(iata) {
             try {
-                const response = await fetch(getApiUrl(`/arrivals/${iata}`));
+                const response = await fetch(getApiUrl(`/arrivals?iata=${iata}`));
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -117,7 +175,7 @@
          */
         async function fetchDepartures(iata) {
             try {
-                const response = await fetch(getApiUrl(`/departures/${iata}`));
+                const response = await fetch(getApiUrl(`/departures?iata=${iata}`));
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -217,42 +275,10 @@
             if (iata.length == 3) {
                 fetchArrivals(iata);
                 fetchDepartures(iata);
+                startCountdown(); // Start countdown
             } else {
                 alert('Please enter a valid Airport IATA');
-            }
-        });
-
-
-        //Auto fetch data for default IATA on page load
-        let autoRefreshInterval = null;
-
-        function startAutoRefresh() {
-            const iata = iataInput.value.toUpperCase().trim();
-            if (iata.length === 3) {
-                // Clear existing interval if any
-                if (autoRefreshInterval) {
-                    clearInterval(autoRefreshInterval);
-                }
-
-                // Set new interval for 30 minutes
-                autoRefreshInterval = setInterval(() => {
-                    const currentIata = iataInput.value.toUpperCase().trim();
-                    if (currentIata.length === 3) {
-                        fetchArrivals(currentIata);
-                        fetchDepartures(currentIata);
-                    }
-                }, 30 * 60 * 1000); // 1 minute
-            }
-        }
-
-        refreshBtn.addEventListener('click', function () {
-            const iata = iataInput.value.toUpperCase().trim();
-            if (iata.length == 3) {
-                fetchArrivals(iata);
-                fetchDepartures(iata);
-                startAutoRefresh(); // Start auto-refresh
-            } else {
-                alert('Please enter a valid Airport IATA');
+                stopCountdown();
             }
         });
     </script>

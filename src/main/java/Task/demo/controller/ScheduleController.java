@@ -4,8 +4,8 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import Task.demo.dto.response.FlightDisplayDTO;
@@ -27,8 +27,8 @@ public class ScheduleController {
      * Flow: Cache -> Database -> External API
      * Returns processed flight data with calculated delay times
      */
-    @GetMapping("/arrivals/{iata}")
-    public List<FlightDisplayDTO> getArrivals(@PathVariable String iata) {
+    @GetMapping("/arrivals")
+    public List<FlightDisplayDTO> getArrivals(@RequestParam String iata) {
         return scheduleService.getArrivals(iata.toUpperCase());
     }
     
@@ -37,8 +37,8 @@ public class ScheduleController {
      * Flow: Cache -> Database -> External API
      * Returns processed flight data with calculated delay times
      */
-    @GetMapping("/departures/{iata}")
-    public List<FlightDisplayDTO> getDepartures(@PathVariable String iata) {
+    @GetMapping("/departures")
+    public List<FlightDisplayDTO> getDepartures(@RequestParam String iata) {
         return scheduleService.getDepartures(iata.toUpperCase());
     }
 }

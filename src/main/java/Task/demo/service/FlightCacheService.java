@@ -16,7 +16,7 @@ public class FlightCacheService {
     
     private static final String ARRIVALS_PREFIX = "arrivals:";
     private static final String DEPARTURES_PREFIX = "departures:";
-    private static final int CACHE_EXPIRATION = 30 * 60; // 30 minutes in seconds
+    private static final int CACHE_EXPIRATION = 30; // 30 minutes
 
     // Lưu arrivals vào cache
     public void cacheArrivals(String iata, List<Flight> flights) {

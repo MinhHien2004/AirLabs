@@ -39,27 +39,36 @@ public class ScheduleService {
      * Flow: Cache -> Database -> External API
      */
     public List<FlightDisplayDTO> getArrivals(String iata) {
+        System.out.println("[ARRIVALS] Fetching for IATA: " + iata);
+        
         // 1. Check cache first
         List<Flight> cachedFlights = cacheService.getArrivalsFromCache(iata);
         if (cachedFlights != null && !cachedFlights.isEmpty()) {
+            System.out.println("[ARRIVALS] Found in cache: " + cachedFlights.size() + " flights");
             return convertToDisplayDTOs(cachedFlights);
         }
+        System.out.println("[ARRIVALS] Cache miss");
         
         // 2. Check database
         List<Flight> dbFlights = flightRepository.findByArrIata(iata);
         if (dbFlights != null && !dbFlights.isEmpty()) {
+            System.out.println("[ARRIVALS] Found in database: " + dbFlights.size() + " flights");
             cacheService.cacheArrivals(iata, dbFlights);
             return convertToDisplayDTOs(dbFlights);
         }
+        System.out.println("[ARRIVALS] Database miss, calling external API...");
         
         // 3. Fetch from external API
         List<Flight> apiFlights = fetchArrivalsFromAPI(iata);
+        System.out.println("[ARRIVALS] API returned: " + (apiFlights != null ? apiFlights.size() : "null") + " flights");
+        
         if (apiFlights != null && !apiFlights.isEmpty()) {
             List<Flight> savedFlights = saveFlights(apiFlights);
             cacheService.cacheArrivals(iata, savedFlights);
             return convertToDisplayDTOs(savedFlights);
         }
         
+        System.out.println("[ARRIVALS] No data available");
         return new ArrayList<>();
     }
 
@@ -68,27 +77,36 @@ public class ScheduleService {
      * Flow: Cache -> Database -> External API
      */
     public List<FlightDisplayDTO> getDepartures(String iata) {
+        System.out.println("[DEPARTURES] Fetching for IATA: " + iata);
+        
         // 1. Check cache first
         List<Flight> cachedFlights = cacheService.getDeparturesFromCache(iata);
         if (cachedFlights != null && !cachedFlights.isEmpty()) {
+            System.out.println("[DEPARTURES] Found in cache: " + cachedFlights.size() + " flights");
             return convertToDisplayDTOs(cachedFlights);
         }
+        System.out.println("[DEPARTURES] Cache miss");
         
         // 2. Check database
         List<Flight> dbFlights = flightRepository.findByDepIata(iata);
         if (dbFlights != null && !dbFlights.isEmpty()) {
+            System.out.println("[DEPARTURES] Found in database: " + dbFlights.size() + " flights");
             cacheService.cacheDepartures(iata, dbFlights);
             return convertToDisplayDTOs(dbFlights);
         }
+        System.out.println("[DEPARTURES] Database miss, calling external API...");
         
         // 3. Fetch from external API
         List<Flight> apiFlights = fetchDeparturesFromAPI(iata);
+        System.out.println("[DEPARTURES] API returned: " + (apiFlights != null ? apiFlights.size() : "null") + " flights");
+        
         if (apiFlights != null && !apiFlights.isEmpty()) {
             List<Flight> savedFlights = saveFlights(apiFlights);
             cacheService.cacheDepartures(iata, savedFlights);
             return convertToDisplayDTOs(savedFlights);
         }
         
+        System.out.println("[DEPARTURES] No data available");
         return new ArrayList<>();
     }
 
@@ -99,12 +117,16 @@ public class ScheduleService {
     private List<Flight> fetchArrivalsFromAPI(String iata) {
         try {
             String url = airLabsConfig.getBaseUrl() + "/schedules?arr_iata=" + iata + "&api_key=" + airLabsConfig.getApiKey();
+            System.out.println("[API] Calling AirLabs API: " + url.replace(airLabsConfig.getApiKey(), "***"));
+            
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            System.out.println("[API] Response received: " + (response != null ? response.keySet() : "null"));
             
             if (response != null && response.containsKey("response")) {
                 List<Map<String, Object>> apiFlights = (List<Map<String, Object>>) response.get("response");
-                List<Flight> flights = new ArrayList<>();
+                System.out.println("[API] Parsed flights: " + (apiFlights != null ? apiFlights.size() : "null"));
                 
+                List<Flight> flights = new ArrayList<>();
                 for (Map<String, Object> apiData : apiFlights) {
                     flights.add(mapToFlight(apiData));
                 }
@@ -112,7 +134,8 @@ public class ScheduleService {
                 return flights;
             }
         } catch (Exception e) {
-            System.err.println("Error fetching arrivals from API: " + e.getMessage());
+            System.err.println("[API] Error fetching arrivals from API: " + e.getMessage());
+            e.printStackTrace();
         }
         return new ArrayList<>();
     }
@@ -124,12 +147,16 @@ public class ScheduleService {
     private List<Flight> fetchDeparturesFromAPI(String iata) {
         try {
             String url = airLabsConfig.getBaseUrl() + "/schedules?dep_iata=" + iata + "&api_key=" + airLabsConfig.getApiKey();
+            System.out.println("[API] Calling AirLabs API: " + url.replace(airLabsConfig.getApiKey(), "***"));
+            
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            System.out.println("[API] Response received: " + (response != null ? response.keySet() : "null"));
             
             if (response != null && response.containsKey("response")) {
                 List<Map<String, Object>> apiFlights = (List<Map<String, Object>>) response.get("response");
-                List<Flight> flights = new ArrayList<>();
+                System.out.println("[API] Parsed flights: " + (apiFlights != null ? apiFlights.size() : "null"));
                 
+                List<Flight> flights = new ArrayList<>();
                 for (Map<String, Object> apiData : apiFlights) {
                     flights.add(mapToFlight(apiData));
                 }
@@ -137,7 +164,8 @@ public class ScheduleService {
                 return flights;
             }
         } catch (Exception e) {
-            System.err.println("Error fetching departures from API: " + e.getMessage());
+            System.err.println("[API] Error fetching departures from API: " + e.getMessage());
+            e.printStackTrace();
         }
         return new ArrayList<>();
     }

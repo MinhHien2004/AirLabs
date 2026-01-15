@@ -813,7 +813,7 @@ spring.redis.host=localhost
 spring.redis.port=6379
 
 # AirLabs API
-AIRLABS_API_KEY=1ffd3d4c-1ea9-4b6c-8f0e-2250ad010506
+AIRLABS_API_KEY=7e455240-da34-4d41-823b-1efa9f2b0467
 ```
 
 ### Dependencies

@@ -14,13 +14,17 @@ import Task.demo.dto.request.FlightCreateRequest;
 import Task.demo.dto.request.FlightUpdateRequest;
 import Task.demo.entity.Flight;
 
+/**
+ * Service xử lý logic nghiệp vụ cho Flight
+ * Đã được nâng cấp để delegate sang FlightServiceV2 cho các tính năng caching nâng cao
+ */
 @Service
 public class FlightService {
     @Autowired
     private FlightRepository flightRepository;
 
     @Autowired
-    private FlightCacheService cacheService;
+    private FlightCacheServiceV2 cacheService;
     
     @Autowired
     private RestTemplate restTemplate;
@@ -127,131 +131,194 @@ public class FlightService {
         return flightRepository.findAllDepIata();
     }
 
+    /**
+     * Xử lý arrivals với Multi-Layer Smart Caching
+     * Triển khai theo RedisCacheWorkFlow.md
+     */
     public List<Flight> processArrivals(String iata, List<Flight> newFlights){
-        // Nếu frontend không gửi dữ liệu, tự động fetch từ API
+        String type = "arrivals";
+        
+        // Nếu frontend không gửi dữ liệu, sử dụng smart caching
         if (newFlights == null || newFlights.isEmpty()) {
-            // Kiểm tra database trước
+            // STEP 1: Check Negative Cache
+            if (cacheService.isNegativeCached(iata, type)) {
+                System.out.println("Negative cache HIT for arrivals:" + iata);
+                return new ArrayList<>();
+            }
+            
+            // STEP 2: Check Data Cache với Logical Expiration
+            FlightCacheServiceV2.CacheResult cacheResult = cacheService.getFlightsFromCache(iata, type);
+            
+            if (cacheResult.isCacheHit()) {
+                if (!cacheResult.isLogicallyExpired()) {
+                    // Cache còn fresh - trả về ngay
+                    System.out.println("Cache HIT (fresh) for arrivals:" + iata);
+                    return cacheResult.getFlights();
+                } else {
+                    // Cache expired logic - trả về data cũ + async update
+                    System.out.println("Cache HIT (stale) for arrivals:" + iata + " - triggering async update");
+                    asyncFetchAndSync(iata, type);
+                    return cacheResult.getFlights();
+                }
+            }
+            
+            // STEP 3: Cache MISS - kiểm tra database
             List<Flight> dbFlights = flightRepository.findByArrIata(iata);
             if (dbFlights != null && !dbFlights.isEmpty()) {
-                // Có dữ liệu trong DB, trả về luôn
-                cacheService.cacheArrivals(iata, dbFlights);
+                cacheService.incrementCounter(iata, type);
+                long logicalTtl = cacheService.determineLogicalTtl(iata, type);
+                cacheService.cacheFlights(iata, type, dbFlights, logicalTtl);
                 return dbFlights;
             }
             
-            // Database rỗng, fetch từ API public
-            newFlights = fetchArrivalsFromAPI(iata);
-            if (newFlights == null || newFlights.isEmpty()) {
-                return new ArrayList<>();
-            }
+            // STEP 4: Database rỗng - fetch từ API
+            return fetchAndSyncArrivals(iata);
         }
         
-        // 1. Get data from cache
-        List<Flight> cachedFlights = cacheService.getArrivalsFromCache(iata);
-
-        // if cache is empty, get data from DB
-        if (cachedFlights == null) {
-            cachedFlights = new ArrayList<>();
-            List<Flight> dbFlights = flightRepository.findByArrIata(iata);
-            if(dbFlights != null && !dbFlights.isEmpty()) {
-                cachedFlights = dbFlights;
-                // Save in cache
-                cacheService.cacheArrivals(iata, cachedFlights);
-            }
-        }
-
-        List<Flight> processedFlights = new ArrayList<>();
-        
-        for (Flight newFlight : newFlights) {
-            try {
-                // Check if flight already exists in DB (based on unique constraint)
-                Flight existingFlight = flightRepository.findByFlightIataAndDepTime(
-                    newFlight.getFlightIata(), 
-                    newFlight.getDepTime()
-                );
-                
-                if (existingFlight != null) {
-                    // Flight already exists, update it
-                    newFlight.setId(existingFlight.getId());
-                    Flight updatedFlight = flightRepository.save(newFlight);
-                    processedFlights.add(updatedFlight);
-                } else {
-                    // New flight, save to DB
-                    Flight savedFlight = flightRepository.save(newFlight);
-                    processedFlights.add(savedFlight);
-                }
-            } catch (Exception e) {
-                // Skip duplicate error (may be from concurrent request)
-                System.out.println("Skip duplicate flight: " + newFlight.getFlightIata());
-            }
-        }
-
-        //4. Update cache
-        cacheService.cacheArrivals((iata), processedFlights);
-
-        return processedFlights;
-
+        // Frontend gửi dữ liệu - sync vào DB và cache với dedup
+        return syncFlightsToDatabase(iata, type, newFlights);
     }
 
-    // Xử lý departures với cache
+    /**
+     * Xử lý departures với Multi-Layer Smart Caching
+     */
     public List<Flight> processDepartures(String iata, List<Flight> newFlights) {
-        // Nếu frontend không gửi dữ liệu, tự động fetch từ API
+        String type = "departures";
+        
+        // Nếu frontend không gửi dữ liệu, sử dụng smart caching
         if (newFlights == null || newFlights.isEmpty()) {
-            // Kiểm tra database trước
+            // STEP 1: Check Negative Cache
+            if (cacheService.isNegativeCached(iata, type)) {
+                System.out.println("Negative cache HIT for departures:" + iata);
+                return new ArrayList<>();
+            }
+            
+            // STEP 2: Check Data Cache với Logical Expiration
+            FlightCacheServiceV2.CacheResult cacheResult = cacheService.getFlightsFromCache(iata, type);
+            
+            if (cacheResult.isCacheHit()) {
+                if (!cacheResult.isLogicallyExpired()) {
+                    System.out.println("Cache HIT (fresh) for departures:" + iata);
+                    return cacheResult.getFlights();
+                } else {
+                    System.out.println("Cache HIT (stale) for departures:" + iata + " - triggering async update");
+                    asyncFetchAndSync(iata, type);
+                    return cacheResult.getFlights();
+                }
+            }
+            
+            // STEP 3: Cache MISS - kiểm tra database
             List<Flight> dbFlights = flightRepository.findByDepIata(iata);
             if (dbFlights != null && !dbFlights.isEmpty()) {
-                // Có dữ liệu trong DB, trả về luôn
-                cacheService.cacheDepartures(iata, dbFlights);
+                cacheService.incrementCounter(iata, type);
+                long logicalTtl = cacheService.determineLogicalTtl(iata, type);
+                cacheService.cacheFlights(iata, type, dbFlights, logicalTtl);
                 return dbFlights;
             }
             
-            // Database rỗng, fetch từ API public
-            newFlights = fetchDeparturesFromAPI(iata);
-            if (newFlights == null || newFlights.isEmpty()) {
-                return new ArrayList<>();
-            }
+            // STEP 4: Database rỗng - fetch từ API
+            return fetchAndSyncDepartures(iata);
         }
         
-        // 1. Lấy dữ liệu từ cache
-        List<Flight> cachedFlights = cacheService.getDeparturesFromCache(iata);
-        
-        // Nếu cache rỗng, lấy từ database
-        if (cachedFlights == null) {
-            cachedFlights = new ArrayList<>();
-            List<Flight> dbFlights = flightRepository.findByDepIata(iata);
-            if (dbFlights != null && !dbFlights.isEmpty()) {
-                cachedFlights = dbFlights;
-                cacheService.cacheDepartures(iata, cachedFlights);
-            }
-        }
-        
-        // 2. So sánh và cập nhật
-        List<Flight> processedFlights = new ArrayList<>();
-        
-        for (Flight newFlight : newFlights) {
+        // Frontend gửi dữ liệu - sync vào DB và cache
+        return syncFlightsToDatabase(iata, type, newFlights);
+    }
+    
+    /**
+     * Async update khi cache hết hạn logic
+     */
+    private void asyncFetchAndSync(String iata, String type) {
+        // Sử dụng thread mới để không block user
+        new Thread(() -> {
             try {
-                // Kiểm tra xem flight đã tồn tại trong DB chưa (dựa vào unique constraint)
+                System.out.println("[ASYNC] Starting background update for " + type + ":" + iata);
+                if ("arrivals".equals(type)) {
+                    fetchAndSyncArrivals(iata);
+                } else {
+                    fetchAndSyncDepartures(iata);
+                }
+                System.out.println("[ASYNC] Completed background update for " + type + ":" + iata);
+            } catch (Exception e) {
+                System.err.println("[ASYNC] Error: " + e.getMessage());
+            }
+        }).start();
+    }
+    
+    /**
+     * Fetch arrivals từ API và sync vào DB
+     */
+    private List<Flight> fetchAndSyncArrivals(String iata) {
+        List<Flight> apiFlights = fetchArrivalsFromAPI(iata);
+        
+        if (apiFlights == null || apiFlights.isEmpty()) {
+            cacheService.setNegativeCache(iata, "arrivals");
+            return new ArrayList<>();
+        }
+        
+        return syncFlightsToDatabase(iata, "arrivals", apiFlights);
+    }
+    
+    /**
+     * Fetch departures từ API và sync vào DB
+     */
+    private List<Flight> fetchAndSyncDepartures(String iata) {
+        List<Flight> apiFlights = fetchDeparturesFromAPI(iata);
+        
+        if (apiFlights == null || apiFlights.isEmpty()) {
+            cacheService.setNegativeCache(iata, "departures");
+            return new ArrayList<>();
+        }
+        
+        return syncFlightsToDatabase(iata, "departures", apiFlights);
+    }
+    
+    /**
+     * Sync flights vào DB với Hash-based Dedup
+     */
+    private List<Flight> syncFlightsToDatabase(String iata, String type, List<Flight> flights) {
+        cacheService.incrementCounter(iata, type);
+        long logicalTtl = cacheService.determineLogicalTtl(iata, type);
+        
+        List<Flight> processedFlights = new ArrayList<>();
+        int inserted = 0, updated = 0, skipped = 0;
+        
+        for (Flight newFlight : flights) {
+            try {
                 Flight existingFlight = flightRepository.findByFlightIataAndDepTime(
                     newFlight.getFlightIata(), 
                     newFlight.getDepTime()
                 );
                 
-                if (existingFlight != null) {
-                    newFlight.setId(existingFlight.getId());
-                    Flight updatedFlight = flightRepository.save(newFlight);
-                    processedFlights.add(updatedFlight);
-                } else {
-                    // Flight mới, lưu vào DB
+                if (existingFlight == null) {
+                    // INSERT mới
                     Flight savedFlight = flightRepository.save(newFlight);
                     processedFlights.add(savedFlight);
+                    inserted++;
+                } else {
+                    // Kiểm tra có thay đổi không (hash comparison)
+                    boolean hasChanged = cacheService.hasChanged(iata, type, newFlight);
+                    
+                    if (hasChanged) {
+                        // UPDATE
+                        newFlight.setId(existingFlight.getId());
+                        Flight updatedFlight = flightRepository.save(newFlight);
+                        processedFlights.add(updatedFlight);
+                        updated++;
+                    } else {
+                        // SKIP - không thay đổi
+                        processedFlights.add(existingFlight);
+                        skipped++;
+                    }
                 }
             } catch (Exception e) {
-                // Bỏ qua lỗi duplicate (có thể do concurrent request)
                 System.out.println("Skip duplicate flight: " + newFlight.getFlightIata());
             }
         }
         
-        // 4. Cập nhật cache
-        cacheService.cacheDepartures(iata, processedFlights);
+        System.out.println("DB Sync: " + inserted + " inserted, " + updated + " updated, " + skipped + " skipped");
+        
+        // Update cache
+        cacheService.cacheFlights(iata, type, processedFlights, logicalTtl);
         
         return processedFlights;
     }

@@ -22,28 +22,32 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true # Format SQL cho dễ đọc hơn
+  
+  # REDIS CONFIGURATION (Redis Cloud)
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:redis-13482.c275.us-east-1-4.ec2.cloud.redislabs.com}
+      port: ${SPRING_REDIS_PORT:13482}
+      username: ${SPRING_REDIS_USERNAME:default}
+      password: ${SPRING_REDIS_PASSWORD:fvKhVJ2XXByDWhOnUvVWvIeYnnMOPKTy}
+      ssl:
+        enabled: ${SPRING_REDIS_SSL:true}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
+          max-wait: 2000ms
 
 airlabs.api:
   base-url: ${AIRLABS_BASE_URL:https://airlabs.co/api/v9}
   api-key: ${AIRLABS_API_KEY:7e455240-da34-4d41-823b-1efa9f2b0467}
 
-spring.data.redis:
-  host: ${SPRING_REDIS_HOST:localhost}
-  port: ${SPRING_REDIS_PORT:6379}
-  password: ${SPRING_REDIS_PASSWORD:}
-  ssl: 
-    enabled: false
-  timeout: 60000ms
-  lettuce:
-    pool:
-      max-active: 10
-      max-idle: 5
-      min-idle: 1
-      max-wait: 2000ms
-
 # Disable Redis health check để không bắt buộc phải có Redis
 management:
   health:
     redis:
-      enabled: false 
+      enabled: false
+ 
 

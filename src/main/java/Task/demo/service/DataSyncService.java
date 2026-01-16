@@ -1,16 +1,12 @@
 package Task.demo.service;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
-import Task.demo.entity.Product;
 import Task.demo.Repository.AirportRepository;
 import Task.demo.Repository.FlightRepository;
-import Task.demo.Repository.ProductRepository;
 import Task.demo.entity.Airline;
 import Task.demo.entity.Airport;
 import Task.demo.entity.Flight;
@@ -20,61 +16,23 @@ import Task.demo.config.*;
 
 @Service
 public class DataSyncService {
-    private final ProductRepository productRepository;
     private final AirlineRepository airlineRepository;
     private final AirportRepository airportRepository;
     private final FlightRepository flightRepository;
     private final RestTemplate restTemplate;
     private final AirLabsConfig airLabsConfig;
 
-    public DataSyncService(ProductRepository productRepository, 
+    public DataSyncService( 
                         AirlineRepository airlineRepository, 
                         AirportRepository airportRepository,
                         FlightRepository flightRepository,
                         AirLabsConfig airLabsConfig,
                         RestTemplate restTemplate){
-        this.productRepository = productRepository;
         this.airlineRepository = airlineRepository;
         this.airportRepository = airportRepository;
         this.flightRepository = flightRepository;
         this.airLabsConfig = airLabsConfig;
         this.restTemplate = restTemplate;
-    }
-
-    public List<Product> fetchAndSaveProduct(){
-        long existingCount = productRepository.count();
-        if(existingCount > 0){
-            System.out.println("Dữ liệu sản phẩm đã tồn tại trong DB. Trả về dữ liệu từ DB.");
-            return productRepository.findAll();
-        }
-        String url = "https://fakestoreapi.com/products";
-
-        //1. Gọi API và map kết quả về mảng ProductApiResponse[]
-        ResponseEntity<ProductApiResponse[]> response = restTemplate.getForEntity(url, ProductApiResponse[].class);
-        ProductApiResponse[] productsArray = response.getBody();
-
-        if(productsArray != null){
-            //2. Convert ProductApiResponse sang Product entity (bỏ ID để auto-generate)
-            List<Product> products = Arrays.stream(productsArray)
-                .map(apiProduct -> {
-                    Product product = new Product();
-                    product.setTitle(apiProduct.getTitle());
-                    product.setPrice(apiProduct.getPrice());
-                    product.setDescription(apiProduct.getDescription());
-                    product.setCategory(apiProduct.getCategory());
-                    product.setImage(apiProduct.getImage());
-                    product.setRating(apiProduct.getRating());
-                    return product;
-                })
-                .collect(Collectors.toList());
-
-            //3. Lưu vào Database
-            productRepository.saveAll(products);
-
-            System.out.println("Đã lưu thành công " + products.size() + " sản phẩm vào DB");
-            return products;
-        }
-        return List.of();
     }
 
     public List<Airline> fetchAndSaveAirline(String iata_code){

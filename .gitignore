@@ -40,8 +40,6 @@ build/
 .env.local
 .env.*.local
 *.env
-application-prod.yaml
-application-production.yaml
 **/application-secrets.yaml
 
 ### Logs ###

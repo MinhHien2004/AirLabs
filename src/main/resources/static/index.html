@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduled</title>
+    <link rel="stylesheet" href="sheduled.css">
+</head>
+
+<body>
+    <div class="header">
+        <input type="text" class="iata" placeholder="Press the airport iata" id="iataInput">
+        <button class="refresh-btn">Refresh</button>
+    </div>
+    <!-- Arrivals Board -->
+    <div class="container">
+        <div class="board">
+            <div class="board-header">
+                <div class="status-dots">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                </div>
+                <span id="arrivalsTitle">Arrivals </span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Carrier</th>
+                        <th>Flight</th>
+                        <th>Origin</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div class="board">
+            <div class="board-header">
+                <div class="status-dots">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                </div>
+                <span id="departuresTitle">Departures </span>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Carrier</th>
+                        <th>Flight</th>
+                        <th>Destination</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                </tbody>
+            </table>
+        </div>
+
+
+
+    </div>
+
+
+    <script>
+        const iataInput = document.getElementById('iataInput');
+        const arrivalsTitle = document.getElementById('arrivalsTitle');
+        const departuresTitle = document.getElementById('departuresTitle');
+        const refreshBtn = document.querySelector('.refresh-btn');
+        const BARE_URL = 'https://airlabs.co/api/v9/';
+        const API_KEY = '7e455240-da34-4d41-823b-1efa9f2b0467';
+
+        // Update titles when input changes
+        iataInput.addEventListener('input', () => {
+            const iata = iataInput.value.trim().toUpperCase();
+            arrivalsTitle.textContent = `Arrivals ${iata}`;
+            departuresTitle.textContent = `Departures ${iata}`;
+        });
+
+        // Fetch arrivals data
+        async function fetchArrivals(iata) {
+            try {
+                const response = await fetch(`${BARE_URL}schedules?arr_iata=${iata}&api_key=${API_KEY}`);
+                const data = await response.json();
+                
+                console.log('API Response:', data); // Debug
+                
+                // Kiểm tra dữ liệu trả về
+                if (!data.response || !Array.isArray(data.response)) {
+                    console.error('Invalid data format:', data);
+                    displayArrivals([]);
+                    return;
+                }
+                
+                // Send data to backend in snake_case (as received from API)
+                // This matches the @JsonProperty annotations in the Flight entity
+                console.log('Sending to backend:', data.response); // Debug
+                
+                // Gửi dữ liệu đến backend để xử lý và lưu
+                const saveResponse = await fetch(`/api/flights/arrivals/${iata}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data.response)
+                });
+                
+                if (!saveResponse.ok) {
+                    const errorText = await saveResponse.text();
+                    console.error('Backend error:', errorText);
+                    throw new Error(`HTTP error! status: ${saveResponse.status}`);
+                }
+                
+                const savedFlights = await saveResponse.json();
+                console.log('Saved flights:', savedFlights); // Debug
+                console.log('First flight object:', savedFlights[0]); // Debug detail
+                displayArrivals(savedFlights);
+            } catch (error) {
+                console.error('Error fetching arrivals:', error);
+                displayArrivals([]);
+            }
+        }
+
+        // Fetch departures data
+        async function fetchDepartures(iata) {
+            try {
+                const response = await fetch(`${BARE_URL}schedules?dep_iata=${iata}&api_key=${API_KEY}`);
+                const data = await response.json();
+                
+                console.log('API Response:', data); // Debug
+                
+                // Kiểm tra dữ liệu trả về
+                if (!data.response || !Array.isArray(data.response)) {
+                    console.error('Invalid data format:', data);
+                    displayDepartures([]);
+                    return;
+                }
+                
+                // Send data to backend in snake_case (as received from API)
+                // This matches the @JsonProperty annotations in the Flight entity
+                console.log('Sending to backend:', data.response); // Debug
+                
+                // Gửi dữ liệu đến backend để xử lý và lưu
+                const saveResponse = await fetch(`/api/flights/departures/${iata}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data.response)
+                });
+                
+                if (!saveResponse.ok) {
+                    const errorText = await saveResponse.text();
+                    console.error('Backend error:', errorText);
+                    throw new Error(`HTTP error! status: ${saveResponse.status}`);
+                }
+                
+                const savedFlights = await saveResponse.json();
+                console.log('Saved flights:', savedFlights); // Debug
+                console.log('First departure object:', savedFlights[0]); // Debug detail
+                displayDepartures(savedFlights);
+            } catch (error) {
+                console.error('Error fetching departures:', error);
+                displayDepartures([]);
+            }
+        }
+
+        //Display arrivals in table
+        function displayArrivals(flights) {
+            const tbody = document.querySelector('.container .board:first-child tbody');
+            tbody.innerHTML = '';
+
+            if (!flights || flights.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+                return;
+            }
+
+            flights.forEach(flight => {
+                const row = document.createElement('tr');
+                const scheduledTime = flight.arr_time ? flight.arr_time.split(" ")[1].substring(0, 5) : 'N/A';
+
+                let actualTime = scheduledTime;
+                let delayedTimeHTML = '';
+
+                if (flight.arr_delayed && scheduledTime !== 'N/A') {
+                    // Tính thời gian thực tế = thời gian dự định + delay (phút)
+                    const [hours, minutes] = scheduledTime.split(':').map(Number);
+                    const totalMinutes = hours * 60 + minutes + parseInt(flight.arr_delayed);
+                    const newHours = Math.floor(totalMinutes / 60) % 24;
+                    const newMinutes = totalMinutes % 60;
+                    actualTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+                    delayedTimeHTML = `<span class='old-time'>${scheduledTime}</span>`;
+                }
+
+                row.innerHTML = `
+                    <td>${actualTime} ${delayedTimeHTML}</td>
+                    <td>${flight.airline_iata || "N/A"}</td>
+                    <td><a href='#' class="flight-number">${flight.flight_iata || flight.flight_number || 'N/A'}</a></td>
+                    <td>${flight.dep_iata || "N/A"}</td>
+                    <td class="status ${getStatusClass(flight.status)}">${flight.status || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Display departures in table
+        function displayDepartures(flights) {
+            const tbody = document.querySelector('.container .board:last-child tbody');
+            tbody.innerHTML = '';
+
+            if (!flights || flights.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+                return;
+            }
+
+            flights.forEach(flight => {
+                const row = document.createElement('tr');
+                const scheduledTime = flight.dep_time ? flight.dep_time.split(" ")[1].substring(0, 5) : 'N/A';
+
+                let actualTime = scheduledTime;
+                let delayedTimeHTML = '';
+
+                if (flight.dep_delayed && scheduledTime !== 'N/A') {
+                    // Tính thời gian thực tế = thời gian dự định + delay (phút)
+                    const [hours, minutes] = scheduledTime.split(':').map(Number);
+                    const totalMinutes = hours * 60 + minutes + parseInt(flight.dep_delayed);
+                    const newHours = Math.floor(totalMinutes / 60) % 24;
+                    const newMinutes = totalMinutes % 60;
+                    actualTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+                    delayedTimeHTML = `<span class='old-time'>${scheduledTime}</span>`;
+                }
+
+                row.innerHTML = `
+                    <td>${actualTime} ${delayedTimeHTML}</td>
+                    <td>${flight.airline_iata || 'N/A'}</td>
+                    <td><a href="#" class="flight-number">${flight.flight_iata || flight.flight_number || 'N/A'}</a></td>
+                    <td>${flight.arr_iata || 'N/A'}</td>
+                    <td class="status ${getStatusClass(flight.status)}">${flight.status || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        //Get CSS class based on status
+        function getStatusClass(status) {
+            if (!status) return "";
+            status = status.toLowerCase();
+            if (status.includes('landed')) return 'landed';
+            if (status.includes('scheduled')) return 'scheduled';
+            if (status.includes('delayed')) return 'delayed';
+            if (status.includes('en-route') || status.includes('active')) return 'en-route';
+            return '';
+        }
+
+        //Refesh button click event 
+        refreshBtn.addEventListener('click', function () {
+            const iata = iataInput.value.toUpperCase().trim();
+            if (iata.length == 3) {
+                fetchArrivals(iata);
+                fetchDepartures(iata);
+            } else {
+                alert('Please enter a valid Airport IATA');
+            }
+        });
+
+
+        //Auto fetch data for default IATA on page load
+        let autoRefreshInterval = null;
+
+        function startAutoRefresh() {
+            const iata = iataInput.value.toUpperCase().trim();
+            if (iata.length === 3) {
+                // Clear existing interval if any
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                }
+
+                // Set new interval for 30 minutes
+                autoRefreshInterval = setInterval(() => {
+                    const currentIata = iataInput.value.toUpperCase().trim();
+                    if (currentIata.length === 3) {
+                        fetchArrivals(currentIata);
+                        fetchDepartures(currentIata);
+                    }
+                }, 30 * 60 * 1000); // 1 minute
+            }
+        }
+
+        refreshBtn.addEventListener('click', function () {
+            const iata = iataInput.value.toUpperCase().trim();
+            if (iata.length == 3) {
+                fetchArrivals(iata);
+                fetchDepartures(iata);
+                startAutoRefresh(); // Start auto-refresh
+            } else {
+                alert('Please enter a valid Airport IATA');
+            }
+        });
+    </script>
+</body>
+
+</html>

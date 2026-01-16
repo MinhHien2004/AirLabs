@@ -1,7 +1,6 @@
 package Task.demo.controller;
 
 import Task.demo.service.DataSyncService;
-import Task.demo.entity.Product;
 import Task.demo.entity.Airline;
 import Task.demo.entity.Airport;
 import Task.demo.entity.Flight;
@@ -20,12 +19,6 @@ public class SyncController {
 
     public SyncController(DataSyncService dataSyncService){
         this.dataSyncService = dataSyncService;
-    }
-
-    @GetMapping("/sync/products")
-    public ResponseEntity<List<Product>> syncProducts(){
-        List<Product> products = dataSyncService.fetchAndSaveProduct();
-        return ResponseEntity.ok(products);
     }
 
     @GetMapping("/sync/airlines")

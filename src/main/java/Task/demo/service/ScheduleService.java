@@ -26,7 +26,7 @@ public class ScheduleService {
     private FlightRepository flightRepository;
 
     @Autowired
-    private FlightCacheService cacheService;
+    private FlightCacheServiceV2 cacheService;
     
     @Autowired
     private RestTemplate restTemplate;

@@ -67,7 +67,13 @@ public class FlightCacheServiceV2 {
             Boolean hasKey = redisTemplate.hasKey(key);
             return Boolean.TRUE.equals(hasKey);
         } catch (Exception e) {
-            System.err.println("Redis negative cache check error: " + e.getMessage());
+            System.err.println("❌ Redis negative cache check error: " + e.getMessage());
+            System.err.println("   Error class: " + e.getClass().getName());
+            if (e.getCause() != null) {
+                System.err.println("   Root cause: " + e.getCause().getMessage());
+                System.err.println("   Cause class: " + e.getCause().getClass().getName());
+            }
+            e.printStackTrace();
             return false;
         }
     }
@@ -134,7 +140,13 @@ public class FlightCacheServiceV2 {
             }
             return 0;
         } catch (Exception e) {
-            System.err.println("Redis counter get error: " + e.getMessage());
+            System.err.println("❌ Redis counter get error: " + e.getMessage());
+            System.err.println("   Error class: " + e.getClass().getName());
+            if (e.getCause() != null) {
+                System.err.println("   Root cause: " + e.getCause().getMessage());
+                System.err.println("   Cause class: " + e.getCause().getClass().getName());
+            }
+            e.printStackTrace();
             return 0;
         }
     }
@@ -189,11 +201,17 @@ public class FlightCacheServiceV2 {
             // Xóa negative cache nếu có dữ liệu
             clearNegativeCache(iata, type);
             
-            System.out.println("Cached " + flights.size() + " flights for " + type + ":" + iata + 
+            System.out.println("✅ Cached " + flights.size() + " flights for " + type + ":" + iata + 
                     " with logical TTL " + logicalTtlMinutes + " min");
                     
         } catch (Exception e) {
-            System.err.println("Redis cache flights error: " + e.getMessage());
+            System.err.println("❌ Redis cache flights error: " + e.getMessage());
+            System.err.println("   Error class: " + e.getClass().getName());
+            if (e.getCause() != null) {
+                System.err.println("   Root cause: " + e.getCause().getMessage());
+                System.err.println("   Cause class: " + e.getCause().getClass().getName());
+            }
+            e.printStackTrace();
         }
     }
     
@@ -234,7 +252,13 @@ public class FlightCacheServiceV2 {
             return new CacheResult(flights, true, anyLogicallyExpired);
             
         } catch (Exception e) {
-            System.err.println("Redis get flights error: " + e.getMessage());
+            System.err.println("❌ Redis get flights error: " + e.getMessage());
+            System.err.println("   Error class: " + e.getClass().getName());
+            if (e.getCause() != null) {
+                System.err.println("   Root cause: " + e.getCause().getMessage());
+                System.err.println("   Cause class: " + e.getCause().getClass().getName());
+            }
+            e.printStackTrace();
             return new CacheResult(null, false, false);
         }
     }

@@ -89,55 +89,55 @@
             return `${API_BASE_URL}/api/schedules${endpoint}`;
         };
 
-        let countdownInterval = null;
-        let remainingSeconds = 0;
-        const REFRESH_INTERVAL = 1 * 60; // 1 minute
+        // let countdownInterval = null;
+        // let remainingSeconds = 0;
+        // const REFRESH_INTERVAL = 1 * 60; // 1 minute
 
-        function updateCountdownDisplay(){
-            const minutes = Math.floor(remainingSeconds / 60);
-            const seconds = remainingSeconds % 60;
-            countdownDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        // function updateCountdownDisplay(){
+        //     const minutes = Math.floor(remainingSeconds / 60);
+        //     const seconds = remainingSeconds % 60;
+        //     countdownDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-            if(remainingSeconds <= 10){
-                countdownDisplay.style.color = '#ff4444'; // Red when < 10 seconds
-            } else {
-                countdownDisplay.style.color = '#4CAF50'; // Green otherwise
-            }
-        }
+        //     if(remainingSeconds <= 10){
+        //         countdownDisplay.style.color = '#ff4444'; // Red when < 10 seconds
+        //     } else {
+        //         countdownDisplay.style.color = '#4CAF50'; // Green otherwise
+        //     }
+        // }
 
-        function startCountdown(){
-            remainingSeconds = REFRESH_INTERVAL;
-            updateCountdownDisplay();
+        // function startCountdown(){
+        //     remainingSeconds = REFRESH_INTERVAL;
+        //     updateCountdownDisplay();
 
-            if(countdownInterval){
-                clearInterval(countdownInterval);
-            }
+        //     if(countdownInterval){
+        //         clearInterval(countdownInterval);
+        //     }
 
-            countdownInterval = setInterval(() => {
-                remainingSeconds--;
-                updateCountdownDisplay();
+        //     countdownInterval = setInterval(() => {
+        //         remainingSeconds--;
+        //         updateCountdownDisplay();
 
-                if(remainingSeconds <= 0){
-                    // Tự động refresh khi hết thời gian
-                    const iata = iataInput.value.toUpperCase().trim();
-                    if(iata.length === 3){
-                        fetchArrivals(iata);
-                        fetchDepartures(iata);
-                    }
-                    // Reset countdown về đầu
-                    remainingSeconds = REFRESH_INTERVAL;
-                }
-            }, 1000);
-        }
+        //         if(remainingSeconds <= 0){
+        //             // Tự động refresh khi hết thời gian
+        //             const iata = iataInput.value.toUpperCase().trim();
+        //             if(iata.length === 3){
+        //                 fetchArrivals(iata);
+        //                 fetchDepartures(iata);
+        //             }
+        //             // Reset countdown về đầu
+        //             remainingSeconds = REFRESH_INTERVAL;
+        //         }
+        //     }, 1000);
+        // }
 
-        function stopCountdown(){
-            if(countdownInterval){
-                clearInterval(countdownInterval);
-                countdownInterval = null;
-            }
-            countdownDisplay.textContent = '--:--';
-            countdownDisplay.style.color = '#666';
-        }
+        // function stopCountdown(){
+        //     if(countdownInterval){
+        //         clearInterval(countdownInterval);
+        //         countdownInterval = null;
+        //     }
+        //     countdownDisplay.textContent = '--:--';
+        //     countdownDisplay.style.color = '#666';
+        // }
 
 
 
@@ -275,10 +275,10 @@
             if (iata.length == 3) {
                 fetchArrivals(iata);
                 fetchDepartures(iata);
-                startCountdown(); // Start countdown
+                //startCountdown(); // Start countdown
             } else {
                 alert('Please enter a valid Airport IATA');
-                stopCountdown();
+                //stopCountdown();
             }
         });
     </script>

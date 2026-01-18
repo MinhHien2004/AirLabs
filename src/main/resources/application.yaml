@@ -55,11 +55,11 @@ spring:
   data:
     redis:
       host: ${SPRING_REDIS_HOST:redis-13482.c275.us-east-1-4.ec2.cloud.redislabs.com}
-      port: ${SPRING_REDIS_PORT:13483}
+      port: ${SPRING_REDIS_PORT:13482}
       username: ${SPRING_REDIS_USERNAME:default}
       password: ${SPRING_REDIS_PASSWORD:fvKhVJ2XXByDWhOnUvVWvIeYnnMOPKTy}
       ssl:
-        enabled: true  # Tắt SSL nếu dùng Redis local
+        enabled: false  # Tắt SSL nếu dùng Redis local
         bundle: null  # Không dùng SSL bundle tùy chỉnh
       timeout: 5000ms          # Giảm timeout
       connect-timeout: 3000ms  # Giảm connect timeout

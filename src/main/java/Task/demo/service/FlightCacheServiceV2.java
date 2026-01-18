@@ -40,18 +40,18 @@ public class FlightCacheServiceV2 {
 
     // Key prefixes theo thiết kế
     private static final String DATA_PREFIX = "flights:data:";        // Hash lưu dữ liệu
-    private static final String COUNTER_PREFIX = "flights:counter:";   // Counter đếm tần suất
+    private static final String COUNTER_PREFIX = "flights:counter:";   // Counter đếm tần suất (theo IATA chung)
     private static final String NEGATIVE_PREFIX = "flights:empty:";    // Negative cache marker
     
     // TTL configurations (theo thiết kế)
     private static final long PHYSICAL_TTL_MINUTES = 60;    // TTL vật lý trên Redis
-    private static final long LOGICAL_TTL_HOT_MINUTES = 30; // TTL logic cho hot data (count >= 2)
-    private static final long LOGICAL_TTL_COLD_MINUTES = 5; // TTL logic cho cold data (count < 2)
+    private static final long LOGICAL_TTL_HOT_MINUTES = 30; // TTL logic cho hot data (count >= 3)
+    private static final long LOGICAL_TTL_COLD_MINUTES = 5; // TTL logic cho cold data (count < 3)
     private static final long COUNTER_TTL_MINUTES = 30;     // TTL cho counter
     private static final long NEGATIVE_TTL_MINUTES = 5;     // TTL cho negative cache
     
-    // Threshold cho hot data
-    private static final int HOT_DATA_THRESHOLD = 2;
+    // Threshold cho hot data - chỉ cache khi IATA được gọi >= 3 lần
+    private static final int HOT_DATA_THRESHOLD = 3;
 
     // ===========================================
     // 1. NEGATIVE CACHE OPERATIONS
@@ -106,20 +106,27 @@ public class FlightCacheServiceV2 {
 
     // ===========================================
     // 2. COUNTER OPERATIONS (Frequency-Based)
+    // Counter đếm theo IATA CHUNG, không phân biệt arrivals/departures
+    // Vì 1 request user thường gọi cả arr_iata + dep_iata
     // ===========================================
     
     /**
      * Tăng counter cho IATA code và trả về giá trị mới
+     * Counter đếm chung cho cả arrivals và departures
      */
     public long incrementCounter(String iata, String type) {
         try {
-            String key = COUNTER_PREFIX + type + ":" + iata;
+            // Dùng key chung cho IATA, không phân biệt type
+            String key = COUNTER_PREFIX + iata;
             Long count = redisTemplate.opsForValue().increment(key);
             
             // Set TTL nếu là counter mới
             if (count != null && count == 1) {
                 redisTemplate.expire(key, Duration.ofMinutes(COUNTER_TTL_MINUTES));
             }
+            
+            System.out.println("📊 Counter for IATA " + iata + ": " + count + 
+                    " (threshold: " + HOT_DATA_THRESHOLD + ", from: " + type + ")");
             
             return count != null ? count : 0;
         } catch (Exception e) {
@@ -129,11 +136,12 @@ public class FlightCacheServiceV2 {
     }
     
     /**
-     * Lấy giá trị counter hiện tại
+     * Lấy giá trị counter hiện tại (chung cho cả arrivals/departures)
      */
     public long getCounter(String iata, String type) {
         try {
-            String key = COUNTER_PREFIX + type + ":" + iata;
+            // Dùng key chung cho IATA
+            String key = COUNTER_PREFIX + iata;
             Object value = redisTemplate.opsForValue().get(key);
             if (value != null) {
                 return Long.parseLong(value.toString());
@@ -152,15 +160,26 @@ public class FlightCacheServiceV2 {
     }
     
     /**
+     * Kiểm tra xem IATA có đủ điều kiện cache với TTL dài (30 phút) không
+     * Điều kiện: counter >= 3
+     */
+    public boolean isHotData(String iata) {
+        long count = getCounter(iata, null);
+        return count >= HOT_DATA_THRESHOLD;
+    }
+    
+    /**
      * Xác định TTL logic dựa trên counter (Frequency-Based)
+     * - Counter >= 3: Hot data -> 30 phút
+     * - Counter < 3: Cold data -> 5 phút
      */
     public long determineLogicalTtl(String iata, String type) {
         long count = getCounter(iata, type);
         if (count >= HOT_DATA_THRESHOLD) {
-            System.out.println("IATA " + iata + " is HOT DATA (count=" + count + "), using 30 min TTL");
+            System.out.println("🔥 IATA " + iata + " is HOT DATA (count=" + count + " >= " + HOT_DATA_THRESHOLD + "), using 30 min TTL");
             return LOGICAL_TTL_HOT_MINUTES;
         } else {
-            System.out.println("IATA " + iata + " is COLD DATA (count=" + count + "), using 5 min TTL");
+            System.out.println("❄️ IATA " + iata + " is COLD DATA (count=" + count + " < " + HOT_DATA_THRESHOLD + "), using 5 min TTL");
             return LOGICAL_TTL_COLD_MINUTES;
         }
     }
@@ -309,8 +328,8 @@ public class FlightCacheServiceV2 {
         try {
             redisTemplate.delete(DATA_PREFIX + "arrivals:" + iata);
             redisTemplate.delete(DATA_PREFIX + "departures:" + iata);
-            redisTemplate.delete(COUNTER_PREFIX + "arrivals:" + iata);
-            redisTemplate.delete(COUNTER_PREFIX + "departures:" + iata);
+            // Counter dùng key chung cho IATA
+            redisTemplate.delete(COUNTER_PREFIX + iata);
             clearNegativeCache(iata, "arrivals");
             clearNegativeCache(iata, "departures");
             System.out.println("Cleared all cache for IATA: " + iata);

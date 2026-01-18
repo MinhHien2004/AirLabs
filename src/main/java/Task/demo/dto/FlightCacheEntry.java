@@ -1,10 +1,13 @@
 package Task.demo.dto;
 
 import java.io.Serializable;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import Task.demo.dto.response.FlightDisplayDTO;
 import Task.demo.entity.Flight;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,7 +15,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * DTO để lưu trữ thông tin Flight trong Redis Cache
- * Bao gồm thêm metadata để hỗ trợ chiến lược caching thông minh
+ * Hỗ trợ cả single Flight và List<FlightDisplayDTO>
  */
 @Data
 @NoArgsConstructor
@@ -22,14 +25,19 @@ public class FlightCacheEntry implements Serializable {
     private static final long serialVersionUID = 1L;
     
     /**
-     * Dữ liệu chuyến bay
+     * Danh sách flights (dùng cho cache theo IATA)
+     */
+    @JsonProperty("flights")
+    private List<FlightDisplayDTO> flights;
+    
+    /**
+     * Dữ liệu chuyến bay đơn lẻ (dùng cho cache từng flight)
      */
     @JsonProperty("flight")
     private Flight flight;
     
     /**
      * Mã hash của đối tượng Flight để so sánh thay đổi
-     * Dùng SHA-256 hash của toàn bộ nội dung
      */
     @JsonProperty("content_hash")
     private String contentHash;
@@ -41,17 +49,32 @@ public class FlightCacheEntry implements Serializable {
     private long cachedAt;
     
     /**
+     * Thời điểm hết hạn (Unix timestamp milliseconds)
+     */
+    @JsonProperty("expire_at")
+    private long expireAt;
+    
+    /**
      * Thời điểm hết hạn logic (soft expiration) - Unix timestamp milliseconds
-     * Sau thời điểm này, dữ liệu vẫn được trả về nhưng sẽ kích hoạt async update
      */
     @JsonProperty("logical_expire_at")
     private long logicalExpireAt;
     
     /**
-     * Composite key dùng để xác định unique flight: dep_iata + flight_iata + dep_time
+     * Composite key dùng để xác định unique flight
      */
     @JsonProperty("composite_key")
     private String compositeKey;
+    
+    /**
+     * Constructor cho List<FlightDisplayDTO> với Duration
+     */
+    public FlightCacheEntry(List<FlightDisplayDTO> flights, Instant cachedAt, Duration ttl) {
+        this.flights = flights;
+        this.cachedAt = cachedAt.toEpochMilli();
+        this.expireAt = cachedAt.plus(ttl).toEpochMilli();
+        this.logicalExpireAt = this.expireAt;
+    }
     
     /**
      * Constructor từ Flight entity
@@ -61,7 +84,15 @@ public class FlightCacheEntry implements Serializable {
         this.contentHash = contentHash;
         this.cachedAt = Instant.now().toEpochMilli();
         this.logicalExpireAt = this.cachedAt + (logicalTtlMinutes * 60 * 1000);
+        this.expireAt = this.logicalExpireAt;
         this.compositeKey = generateCompositeKey(flight);
+    }
+    
+    /**
+     * Kiểm tra xem cache entry đã hết hạn chưa
+     */
+    public boolean isExpired() {
+        return Instant.now().toEpochMilli() > this.expireAt;
     }
     
     /**
@@ -72,8 +103,14 @@ public class FlightCacheEntry implements Serializable {
     }
     
     /**
+     * Lấy cachedAt dưới dạng Instant
+     */
+    public Instant getCachedAtInstant() {
+        return Instant.ofEpochMilli(this.cachedAt);
+    }
+    
+    /**
      * Tạo composite key từ Flight
-     * Format: {dep_iata}_{flight_iata}_{dep_time}
      */
     public static String generateCompositeKey(Flight flight) {
         String depIata = flight.getDepIata() != null ? flight.getDepIata() : "";

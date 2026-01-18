@@ -1,181 +1,129 @@
 package Task.demo.service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
+import Task.demo.entity.Flight;
+import Task.demo.dto.response.FlightDisplayDTO;
+import Task.demo.Repository.FlightRepository;
+import Task.demo.config.AirLabsConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import Task.demo.Repository.FlightRepository;
-import Task.demo.config.AirLabsConfig;
-import Task.demo.entity.Flight;
-import Task.demo.service.FlightCacheServiceV2.CacheResult;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * Service xử lý logic nghiệp vụ cho Flight
- * Triển khai Multi-Layer Smart Caching theo RedisCacheWorkFlow.md:
- * 
- * 1. Negative Cache Check - Chặn request đến API không hợp lệ
- * 2. Data Cache Check - Kiểm tra cache với Logical Expiration
- * 3. Async Update - Cập nhật ngầm khi cache hết hạn logic
- * 4. Frequency-Based TTL - TTL động dựa trên mức độ quan tâm
- * 5. Hash-based Dedup - So sánh hash để tránh ghi trùng DB
+ * FlightServiceV2 - Service với Smart Caching
+ * Cache chỉ được tạo khi IATA được gọi >= 3 lần trong 30 phút
  */
 @Service
 public class FlightServiceV2 {
-    
+
+    private static final Logger logger = LoggerFactory.getLogger(FlightServiceV2.class);
+
+    @Autowired
+    private FlightCacheServiceV2 cacheService;
+
     @Autowired
     private FlightRepository flightRepository;
 
     @Autowired
-    private FlightCacheServiceV2 cacheService;
-    
-    @Autowired
     private RestTemplate restTemplate;
-    
+
     @Autowired
     private AirLabsConfig airLabsConfig;
 
-    // ===========================================
-    // MAIN ENTRY POINTS
-    // ===========================================
-    
     /**
-     * Xử lý request lấy arrivals theo IATA
-     * Flow theo RedisCacheWorkFlow.md:
-     * 1. Check Negative Cache
-     * 2. Check Data Cache (với Logical Expiration)
-     * 3. Fetch từ API nếu cần
-     * 4. Sync vào DB với Dedup
+     * Lấy arrivals với smart caching
      */
     public List<Flight> getArrivals(String iata) {
         return getFlights(iata, "arrivals");
     }
-    
+
     /**
-     * Xử lý request lấy departures theo IATA
+     * Lấy departures với smart caching
      */
     public List<Flight> getDepartures(String iata) {
         return getFlights(iata, "departures");
     }
-    
+
     /**
-     * Logic chung cho cả arrivals và departures
-     * OPTIMIZED: Skip DB check if cache hit
+     * Logic chính với smart caching
+     * Cache chỉ lưu khi IATA được gọi >= 3 lần
      */
     private List<Flight> getFlights(String iata, String type) {
-        System.out.println("\n========== Processing " + type + " for IATA: " + iata + " ==========");
+        long startTime = System.currentTimeMillis();
+        String iataUpper = iata.toUpperCase();
         
-        // STEP 1: Check Negative Cache
-        if (cacheService.isNegativeCached(iata, type)) {
-            System.out.println("STEP 1: Negative cache HIT - returning empty");
+        // Tăng call count
+        int callCount = cacheService.incrementCallCount(iataUpper);
+        logger.info("Processing {} for IATA: {} (call #{} in window)", type, iataUpper, callCount);
+
+        // 1. Check negative cache
+        if (cacheService.isNegativeCached(iataUpper, type)) {
+            logger.info("Negative cache HIT for {}:{}", type, iataUpper);
             return new ArrayList<>();
         }
-        System.out.println("STEP 1: Negative cache MISS - continue");
-        
-        // STEP 2: Check Data Cache
-        CacheResult cacheResult = cacheService.getFlightsFromCache(iata, type);
-        
+
+        // 2. Check data cache
+        FlightCacheServiceV2.CacheResult cacheResult = cacheService.getFlightsFromCache(iataUpper, type);
         if (cacheResult.isCacheHit()) {
-            System.out.println("STEP 2: Cache HIT - found " + cacheResult.getFlights().size() + " flights");
-            
-            // STEP 3: Check Logical Expiration
-            if (!cacheResult.isLogicallyExpired()) {
-                // Còn hạn logic -> Trả về ngay (FAST PATH)
-                System.out.println("STEP 3: Cache is FRESH - returning immediately");
-                return cacheResult.getFlights();
-            } else {
-                // Hết hạn logic -> Trả về data cũ + trigger async update
-                System.out.println("STEP 3: Cache is STALE - returning old data + async update");
-                triggerAsyncUpdate(iata, type);
-                return cacheResult.getFlights();
-            }
+            long elapsed = System.currentTimeMillis() - startTime;
+            logger.info("Cache HIT for {}:{} - {} flights in {}ms", type, iataUpper, 
+                cacheResult.getFlights().size(), elapsed);
+            return cacheResult.getFlights();
         }
+
+        // 3. Cache miss - fetch from API
+        logger.info("Cache MISS for {}:{} - fetching from API", type, iataUpper);
+        List<Flight> flights = fetchFromAPI(iataUpper, type);
         
-        System.out.println("STEP 2: Cache MISS - fetching from API directly");
-        
-        // STEP 4: Cache Miss - Fetch from API (skip DB to reduce latency on Render)
-        // Trên cloud environment, network latency đến external API thường tốt hơn
-        // và dữ liệu flight cần realtime nên ưu tiên API
-        return fetchAndSync(iata, type);
-    }
-    
-    /**
-     * Trigger async update khi cache hết hạn logic
-     * User không phải chờ - nhận data cũ ngay lập tức
-     */
-    @Async
-    public CompletableFuture<Void> triggerAsyncUpdate(String iata, String type) {
-        System.out.println("[ASYNC] Starting background update for " + type + ":" + iata);
-        try {
-            fetchAndSync(iata, type);
-            System.out.println("[ASYNC] Completed background update for " + type + ":" + iata);
-        } catch (Exception e) {
-            System.err.println("[ASYNC] Error in background update: " + e.getMessage());
+        if (flights == null || flights.isEmpty()) {
+            cacheService.setNegativeCache(iataUpper, type);
+            return new ArrayList<>();
         }
-        return CompletableFuture.completedFuture(null);
+
+        // 4. Sync to database
+        List<Flight> savedFlights = syncToDatabase(flights);
+
+        // 5. Cache if call count >= 3
+        if (cacheService.shouldCache(iataUpper)) {
+            long ttl = cacheService.determineLogicalTtl(iataUpper, type);
+            cacheService.cacheFlights(iataUpper, type, savedFlights, ttl);
+            logger.info("Cached {} {} flights for IATA: {} (call count >= 3)", savedFlights.size(), type, iataUpper);
+        } else {
+            logger.info("Not caching {} flights for {}:{} (call count < 3)", savedFlights.size(), type, iataUpper);
+        }
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        logger.info("Completed {}:{} with {} flights in {}ms", type, iataUpper, savedFlights.size(), elapsed);
+        
+        return savedFlights;
     }
 
-    // ===========================================
-    // DATA FETCHING
-    // ===========================================
-    
     /**
-     * Fetch data từ API và sync vào DB + Cache
+     * Process arrivals (backward compatible)
      */
-    private List<Flight> fetchAndSync(String iata, String type) {
-        // Fetch từ API
-        List<Flight> apiFlights = fetchFromAPI(iata, type);
-        
-        // Nếu API trả về rỗng -> set negative cache
-        if (apiFlights == null || apiFlights.isEmpty()) {
-            System.out.println("API returned empty - setting negative cache");
-            cacheService.setNegativeCache(iata, type);
-            return new ArrayList<>();
+    public List<Flight> processArrivals(String iata, List<Flight> flights) {
+        if (flights == null || flights.isEmpty()) {
+            return getArrivals(iata);
         }
-        
-        System.out.println("API returned " + apiFlights.size() + " flights");
-        
-        // Increment counter
-        cacheService.incrementCounter(iata, type);
-        
-        // Determine TTL based on frequency
-        long logicalTtl = cacheService.determineLogicalTtl(iata, type);
-        
-        // Sync to DB with dedup logic
-        List<Flight> syncedFlights = syncToDatabase(iata, type, apiFlights);
-        
-        // Update cache
-        cacheService.cacheFlights(iata, type, syncedFlights, logicalTtl);
-        
-        return syncedFlights;
+        return syncToDatabase(flights);
     }
-    
+
     /**
-     * Lấy dữ liệu từ Database
-     * Giữ method này cho fallback nếu cần
+     * Process departures (backward compatible)
      */
-    @SuppressWarnings("unused")
-    private List<Flight> getFromDatabase(String iata, String type) {
-        try {
-            if ("arrivals".equals(type)) {
-                return flightRepository.findByArrIata(iata);
-            } else {
-                return flightRepository.findByDepIata(iata);
-            }
-        } catch (Exception e) {
-            System.err.println("Error fetching from DB: " + e.getMessage());
-            return null;
+    public List<Flight> processDepartures(String iata, List<Flight> flights) {
+        if (flights == null || flights.isEmpty()) {
+            return getDepartures(iata);
         }
+        return syncToDatabase(flights);
     }
-    
+
     /**
-     * Gọi AirLabs API để lấy dữ liệu
+     * Fetch from AirLabs API
      */
     @SuppressWarnings("unchecked")
     private List<Flight> fetchFromAPI(String iata, String type) {
@@ -184,111 +132,60 @@ public class FlightServiceV2 {
             String url = airLabsConfig.getBaseUrl() + "/schedules?" + paramName + "=" + iata 
                     + "&api_key=" + airLabsConfig.getApiKey();
             
-            System.out.println("Calling API: " + url.replace(airLabsConfig.getApiKey(), "***"));
+            logger.debug("Calling API: {}", url.replace(airLabsConfig.getApiKey(), "***"));
             
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
             if (response != null && response.containsKey("response")) {
                 List<Map<String, Object>> apiFlights = (List<Map<String, Object>>) response.get("response");
-                List<Flight> flights = new ArrayList<>();
+                List<Flight> flightList = new ArrayList<>();
                 
                 for (Map<String, Object> apiData : apiFlights) {
                     Flight flight = mapToFlight(apiData);
-                    flights.add(flight);
+                    flightList.add(flight);
                 }
                 
-                return flights;
+                logger.info("API returned {} flights for {}:{}", flightList.size(), type, iata);
+                return flightList;
             }
         } catch (Exception e) {
-            System.err.println("Error fetching from API: " + e.getMessage());
+            logger.error("Error fetching from API: {}", e.getMessage());
         }
         return new ArrayList<>();
     }
 
-    // ===========================================
-    // DATABASE SYNC WITH DEDUP
-    // ===========================================
-    
     /**
-     * Đồng bộ dữ liệu vào Database với logic dedup - BATCH OPTIMIZED
-     * Giảm N+1 queries bằng cách batch check và batch save
+     * Sync flights to database with dedup
      */
-    private List<Flight> syncToDatabase(String iata, String type, List<Flight> newFlights) {
-        System.out.println("Starting optimized DB sync for " + newFlights.size() + " flights");
+    private List<Flight> syncToDatabase(List<Flight> flights) {
+        List<Flight> savedFlights = new ArrayList<>();
+        int inserted = 0, updated = 0, skipped = 0;
         
-        if (newFlights.isEmpty()) {
-            return new ArrayList<>();
-        }
-        
-        // STEP 1: Build composite keys cho tất cả flights
-        Map<String, Flight> newFlightsMap = new HashMap<>();
-        for (Flight f : newFlights) {
-            String key = f.getFlightIata() + "|" + f.getDepTime();
-            newFlightsMap.put(key, f);
-        }
-        
-        // STEP 2: Batch query - tìm tất cả existing flights trong 1 query
-        java.util.Set<String> compositeKeys = newFlightsMap.keySet();
-        List<Flight> existingFlights = flightRepository.findByCompositeKeys(compositeKeys);
-        
-        // Build map của existing flights
-        Map<String, Flight> existingMap = new HashMap<>();
-        for (Flight f : existingFlights) {
-            String key = f.getFlightIata() + "|" + f.getDepTime();
-            existingMap.put(key, f);
-        }
-        
-        // STEP 3: Classify flights: INSERT vs UPDATE vs SKIP
-        List<Flight> toInsert = new ArrayList<>();
-        List<Flight> toUpdate = new ArrayList<>();
-        List<Flight> unchanged = new ArrayList<>();
-        
-        for (Map.Entry<String, Flight> entry : newFlightsMap.entrySet()) {
-            String key = entry.getKey();
-            Flight newFlight = entry.getValue();
-            Flight existing = existingMap.get(key);
-            
-            if (existing == null) {
-                // New flight - INSERT
-                toInsert.add(newFlight);
-            } else {
-                // Check if changed
-                if (cacheService.hasChanged(iata, type, newFlight)) {
-                    newFlight.setId(existing.getId());
-                    toUpdate.add(newFlight);
+        for (Flight flight : flights) {
+            try {
+                Flight existing = flightRepository.findByFlightIataAndDepTime(
+                    flight.getFlightIata(), flight.getDepTime());
+                
+                if (existing == null) {
+                    savedFlights.add(flightRepository.save(flight));
+                    inserted++;
                 } else {
-                    unchanged.add(existing);
+                    flight.setId(existing.getId());
+                    savedFlights.add(flightRepository.save(flight));
+                    updated++;
                 }
+            } catch (Exception e) {
+                savedFlights.add(flight);
+                skipped++;
             }
         }
         
-        // STEP 4: Batch save
-        List<Flight> syncedFlights = new ArrayList<>();
-        
-        if (!toInsert.isEmpty()) {
-            List<Flight> inserted = flightRepository.saveAll(toInsert);
-            syncedFlights.addAll(inserted);
-        }
-        
-        if (!toUpdate.isEmpty()) {
-            List<Flight> updated = flightRepository.saveAll(toUpdate);
-            syncedFlights.addAll(updated);
-        }
-        
-        syncedFlights.addAll(unchanged);
-        
-        System.out.println("DB Sync complete: " + toInsert.size() + " inserted, " + 
-                toUpdate.size() + " updated, " + unchanged.size() + " skipped");
-        
-        return syncedFlights;
+        logger.info("DB sync: {} inserted, {} updated, {} skipped", inserted, updated, skipped);
+        return savedFlights;
     }
 
-    // ===========================================
-    // UTILITY METHODS
-    // ===========================================
-    
     /**
-     * Convert Map từ API sang Flight entity
+     * Convert API response to Flight entity
      */
     private Flight mapToFlight(Map<String, Object> data) {
         Flight flight = new Flight();
@@ -323,47 +220,116 @@ public class FlightServiceV2 {
         flight.setAircraftIcao((String) data.get("aircraft_icao"));
         return flight;
     }
-    
+
     /**
-     * Xóa cache cho một IATA
+     * Clear cache for IATA
      */
     public void clearCache(String iata) {
-        cacheService.clearCache(iata);
-    }
-
-    // ===========================================
-    // LEGACY SUPPORT - Backward compatibility với API cũ
-    // ===========================================
-    
-    /**
-     * [LEGACY] Xử lý arrivals từ frontend hoặc tự động fetch
-     */
-    public List<Flight> processArrivals(String iata, List<Flight> flights) {
-        if (flights == null || flights.isEmpty()) {
-            return getArrivals(iata);
-        }
-        
-        // Frontend gửi dữ liệu - sync vào DB và cache
-        cacheService.incrementCounter(iata, "arrivals");
-        long logicalTtl = cacheService.determineLogicalTtl(iata, "arrivals");
-        List<Flight> synced = syncToDatabase(iata, "arrivals", flights);
-        cacheService.cacheFlights(iata, "arrivals", synced, logicalTtl);
-        return synced;
+        cacheService.evictCache(iata);
     }
     
     /**
-     * [LEGACY] Xử lý departures từ frontend hoặc tự động fetch
+     * Get cache stats
      */
-    public List<Flight> processDepartures(String iata, List<Flight> flights) {
-        if (flights == null || flights.isEmpty()) {
-            return getDepartures(iata);
+    public String getCacheStats() {
+        return cacheService.getCallCountStats();
+    }
+    
+    // =====================================================
+    // PUBLIC API METHODS FOR FlightControllerV2
+    // =====================================================
+    
+    /**
+     * Get flight schedules as DTO (for controller)
+     * With smart caching logic
+     */
+    public List<FlightDisplayDTO> getFlightSchedules(String depIata) {
+        List<Flight> flights = getDepartures(depIata);
+        return convertToDTO(flights);
+    }
+    
+    /**
+     * Get flight schedules with force cache (bypass call count check)
+     */
+    public List<FlightDisplayDTO> getFlightSchedulesWithForceCache(String depIata) {
+        String iataUpper = depIata.toUpperCase();
+        
+        // Check cache first
+        FlightCacheServiceV2.CacheResult cacheResult = cacheService.getFlightsFromCache(iataUpper, "departures");
+        if (cacheResult.isCacheHit()) {
+            logger.info("Force cache HIT for departures:{}", iataUpper);
+            return convertToDTO(cacheResult.getFlights());
         }
         
-        // Frontend gửi dữ liệu - sync vào DB và cache
-        cacheService.incrementCounter(iata, "departures");
-        long logicalTtl = cacheService.determineLogicalTtl(iata, "departures");
-        List<Flight> synced = syncToDatabase(iata, "departures", flights);
-        cacheService.cacheFlights(iata, "departures", synced, logicalTtl);
-        return synced;
+        // Fetch from API
+        List<Flight> flights = fetchFromAPI(iataUpper, "departures");
+        if (flights == null || flights.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Sync to DB
+        List<Flight> savedFlights = syncToDatabase(flights);
+        
+        // Force cache immediately
+        cacheService.cacheFlights(iataUpper, "departures", savedFlights, 30);
+        logger.info("Force cached {} departures for IATA: {}", savedFlights.size(), iataUpper);
+        
+        return convertToDTO(savedFlights);
+    }
+    
+    /**
+     * Evict cache for specific IATA
+     */
+    public void evictCache(String iataCode) {
+        cacheService.evictCache(iataCode);
+    }
+    
+    /**
+     * Evict all cache
+     */
+    public void evictAllCache() {
+        cacheService.evictAllCache();
+    }
+    
+    /**
+     * Get call count statistics
+     */
+    public String getCallCountStats() {
+        return cacheService.getCallCountStats();
+    }
+    
+    /**
+     * Convert Flight entities to FlightDisplayDTO
+     */
+    private List<FlightDisplayDTO> convertToDTO(List<Flight> flights) {
+        return flights.stream()
+            .map(this::mapToDTO)
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Map Flight entity to FlightDisplayDTO
+     */
+    private FlightDisplayDTO mapToDTO(Flight flight) {
+        FlightDisplayDTO dto = new FlightDisplayDTO();
+        dto.setId(flight.getId());
+        dto.setAirlineIata(flight.getAirlineIata());
+        dto.setFlightIata(flight.getFlightIata());
+        dto.setFlightNumber(flight.getFlightNumber());
+        dto.setDepIata(flight.getDepIata());
+        dto.setArrIata(flight.getArrIata());
+        dto.setDepTime(flight.getDepTime());
+        dto.setArrTime(flight.getArrTime());
+        dto.setStatus(flight.getStatus());
+        dto.setDepDelayed(flight.getDepDelayed());
+        dto.setArrDelayed(flight.getArrDelayed());
+        
+        // Set calculated times (same as dep/arr time if not delayed)
+        dto.setScheduledDepTime(flight.getDepTime());
+        dto.setScheduledArrTime(flight.getArrTime());
+        dto.setActualDepTime(flight.getDepTime());
+        dto.setActualArrTime(flight.getArrTime());
+        
+        return dto;
     }
 }

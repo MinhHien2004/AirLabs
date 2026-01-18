@@ -1,5 +1,16 @@
 server:
   port: 8080
+  # Enable GZIP compression - giảm response size đáng kể
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+  # Tomcat tuning
+  tomcat:
+    threads:
+      max: 100
+      min-spare: 10
+    connection-timeout: 10000
 
 spring:
   datasource:
@@ -8,20 +19,37 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
+    # HikariCP Connection Pool - tối ưu performance
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      idle-timeout: 30000
+      connection-timeout: 10000
+      max-lifetime: 600000
+      pool-name: FlightHikariPool
   
   jpa:
     # Tự động cập nhật schema (tạo bảng/cột mới nếu chưa có)
     hibernate:
       ddl-auto: update  
     
-    # Hiển thị câu lệnh SQL trong console để dễ debug
-    show-sql: true
+    # TẮT show-sql trong production để tăng performance
+    show-sql: false
     
     # Cấu hình Dialect cho PostgreSQL
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true # Format SQL cho dễ đọc hơn
+        format_sql: false
+        # Tối ưu batch operations
+        jdbc:
+          batch_size: 50
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+        # Connection pool tuning
+        connection:
+          pool_size: 10
   
   # REDIS CONFIGURATION (Redis Cloud)
   data:
@@ -33,15 +61,16 @@ spring:
       ssl:
         enabled: false  # Tắt SSL nếu dùng Redis local
         bundle: null  # Không dùng SSL bundle tùy chỉnh
-      timeout: 10000ms
-      connect-timeout: 10000ms
+      timeout: 5000ms          # Giảm timeout
+      connect-timeout: 3000ms  # Giảm connect timeout
       client-type: lettuce
       lettuce:
         pool:
-          max-active: 8
+          enabled: true        # BẬT connection pool
+          max-active: 16       # Tăng max active connections
           max-idle: 8
-          min-idle: 0
-          max-wait: -1ms
+          min-idle: 2          # Giữ sẵn 2 connections
+          max-wait: 2000ms     # Max wait 2s
         shutdown-timeout: 100ms
 
 airlabs.api:

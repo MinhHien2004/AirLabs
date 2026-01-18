@@ -1,35 +1,9 @@
 package Task.demo.config;
 
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
-
 /**
  * DEPRECATED - Sử dụng RedisCloudConfig thay thế
- * File này giữ lại để backward compatibility
+ * File này giữ lại để backward compatibility nhưng không được sử dụng
  */
-// @Configuration  // Disabled - dùng RedisCloudConfig
 public class RedisConfig {
-    // @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
-
-        // String serializer cho key
-        StringRedisSerializer stringSerializer = new StringRedisSerializer();
-        template.setKeySerializer(stringSerializer);
-        template.setHashKeySerializer(stringSerializer);
-
-        // JSON serializer cho value (hỗ trợ List<Flight>)
-        GenericJackson2JsonRedisSerializer jsonSerializer = 
-            new GenericJackson2JsonRedisSerializer();
-        
-        template.setValueSerializer(jsonSerializer);
-        template.setHashValueSerializer(jsonSerializer);
-
-        return template;
-    }
+    // Empty - all Redis configuration moved to RedisCloudConfig
 }

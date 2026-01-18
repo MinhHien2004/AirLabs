@@ -1,6 +1,7 @@
 package Task.demo.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -12,7 +13,6 @@ import org.springframework.web.client.RestTemplate;
 
 import Task.demo.Repository.FlightRepository;
 import Task.demo.config.AirLabsConfig;
-import Task.demo.dto.FlightCacheEntry;
 import Task.demo.entity.Flight;
 import Task.demo.service.FlightCacheServiceV2.CacheResult;
 
@@ -66,6 +66,7 @@ public class FlightServiceV2 {
     
     /**
      * Logic chung cho cả arrivals và departures
+     * OPTIMIZED: Skip DB check if cache hit
      */
     private List<Flight> getFlights(String iata, String type) {
         System.out.println("\n========== Processing " + type + " for IATA: " + iata + " ==========");
@@ -85,7 +86,7 @@ public class FlightServiceV2 {
             
             // STEP 3: Check Logical Expiration
             if (!cacheResult.isLogicallyExpired()) {
-                // Còn hạn logic -> Trả về ngay
+                // Còn hạn logic -> Trả về ngay (FAST PATH)
                 System.out.println("STEP 3: Cache is FRESH - returning immediately");
                 return cacheResult.getFlights();
             } else {
@@ -96,23 +97,11 @@ public class FlightServiceV2 {
             }
         }
         
-        System.out.println("STEP 2: Cache MISS - need to fetch from API/DB");
+        System.out.println("STEP 2: Cache MISS - fetching from API directly");
         
-        // STEP 4: Cache Miss - Check Database first
-        List<Flight> dbFlights = getFromDatabase(iata, type);
-        if (dbFlights != null && !dbFlights.isEmpty()) {
-            System.out.println("STEP 4: Found " + dbFlights.size() + " flights in DB");
-            
-            // Increment counter và cache
-            cacheService.incrementCounter(iata, type);
-            long logicalTtl = cacheService.determineLogicalTtl(iata, type);
-            cacheService.cacheFlights(iata, type, dbFlights, logicalTtl);
-            
-            return dbFlights;
-        }
-        
-        // STEP 5: Database empty - Fetch from API (synchronous - user must wait)
-        System.out.println("STEP 5: DB empty - fetching from API (sync)");
+        // STEP 4: Cache Miss - Fetch from API (skip DB to reduce latency on Render)
+        // Trên cloud environment, network latency đến external API thường tốt hơn
+        // và dữ liệu flight cần realtime nên ưu tiên API
         return fetchAndSync(iata, type);
     }
     
@@ -169,7 +158,9 @@ public class FlightServiceV2 {
     
     /**
      * Lấy dữ liệu từ Database
+     * Giữ method này cho fallback nếu cần
      */
+    @SuppressWarnings("unused")
     private List<Flight> getFromDatabase(String iata, String type) {
         try {
             if ("arrivals".equals(type)) {
@@ -219,55 +210,75 @@ public class FlightServiceV2 {
     // ===========================================
     
     /**
-     * Đồng bộ dữ liệu vào Database với logic dedup
-     * So sánh hash để xác định insert/update/skip
+     * Đồng bộ dữ liệu vào Database với logic dedup - BATCH OPTIMIZED
+     * Giảm N+1 queries bằng cách batch check và batch save
      */
     private List<Flight> syncToDatabase(String iata, String type, List<Flight> newFlights) {
-        System.out.println("Starting DB sync with dedup for " + newFlights.size() + " flights");
+        System.out.println("Starting optimized DB sync for " + newFlights.size() + " flights");
         
-        List<Flight> syncedFlights = new ArrayList<>();
-        int inserted = 0;
-        int updated = 0;
-        int skipped = 0;
+        if (newFlights.isEmpty()) {
+            return new ArrayList<>();
+        }
         
-        for (Flight newFlight : newFlights) {
-            try {
-                String compositeKey = FlightCacheEntry.generateCompositeKey(newFlight);
-                
-                // Tìm flight existing trong DB
-                Flight existingFlight = flightRepository.findByFlightIataAndDepTime(
-                        newFlight.getFlightIata(), 
-                        newFlight.getDepTime()
-                );
-                
-                if (existingFlight == null) {
-                    // CASE 1: Flight mới - INSERT
-                    Flight savedFlight = flightRepository.save(newFlight);
-                    syncedFlights.add(savedFlight);
-                    inserted++;
+        // STEP 1: Build composite keys cho tất cả flights
+        Map<String, Flight> newFlightsMap = new HashMap<>();
+        for (Flight f : newFlights) {
+            String key = f.getFlightIata() + "|" + f.getDepTime();
+            newFlightsMap.put(key, f);
+        }
+        
+        // STEP 2: Batch query - tìm tất cả existing flights trong 1 query
+        java.util.Set<String> compositeKeys = newFlightsMap.keySet();
+        List<Flight> existingFlights = flightRepository.findByCompositeKeys(compositeKeys);
+        
+        // Build map của existing flights
+        Map<String, Flight> existingMap = new HashMap<>();
+        for (Flight f : existingFlights) {
+            String key = f.getFlightIata() + "|" + f.getDepTime();
+            existingMap.put(key, f);
+        }
+        
+        // STEP 3: Classify flights: INSERT vs UPDATE vs SKIP
+        List<Flight> toInsert = new ArrayList<>();
+        List<Flight> toUpdate = new ArrayList<>();
+        List<Flight> unchanged = new ArrayList<>();
+        
+        for (Map.Entry<String, Flight> entry : newFlightsMap.entrySet()) {
+            String key = entry.getKey();
+            Flight newFlight = entry.getValue();
+            Flight existing = existingMap.get(key);
+            
+            if (existing == null) {
+                // New flight - INSERT
+                toInsert.add(newFlight);
+            } else {
+                // Check if changed
+                if (cacheService.hasChanged(iata, type, newFlight)) {
+                    newFlight.setId(existing.getId());
+                    toUpdate.add(newFlight);
                 } else {
-                    // CASE 2: Flight đã tồn tại - kiểm tra có thay đổi không
-                    boolean hasChanged = cacheService.hasChanged(iata, type, newFlight);
-                    
-                    if (hasChanged) {
-                        // Có thay đổi - UPDATE
-                        newFlight.setId(existingFlight.getId());
-                        Flight updatedFlight = flightRepository.save(newFlight);
-                        syncedFlights.add(updatedFlight);
-                        updated++;
-                    } else {
-                        // Không thay đổi - SKIP
-                        syncedFlights.add(existingFlight);
-                        skipped++;
-                    }
+                    unchanged.add(existing);
                 }
-            } catch (Exception e) {
-                System.err.println("Error syncing flight: " + e.getMessage());
             }
         }
         
-        System.out.println("DB Sync complete: " + inserted + " inserted, " + 
-                updated + " updated, " + skipped + " skipped");
+        // STEP 4: Batch save
+        List<Flight> syncedFlights = new ArrayList<>();
+        
+        if (!toInsert.isEmpty()) {
+            List<Flight> inserted = flightRepository.saveAll(toInsert);
+            syncedFlights.addAll(inserted);
+        }
+        
+        if (!toUpdate.isEmpty()) {
+            List<Flight> updated = flightRepository.saveAll(toUpdate);
+            syncedFlights.addAll(updated);
+        }
+        
+        syncedFlights.addAll(unchanged);
+        
+        System.out.println("DB Sync complete: " + toInsert.size() + " inserted, " + 
+                toUpdate.size() + " updated, " + unchanged.size() + " skipped");
         
         return syncedFlights;
     }

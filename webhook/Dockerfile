@@ -5,11 +5,8 @@ FROM almir/webhook:latest
 COPY hooks.json /etc/webhook/hooks.json
 COPY scripts/ /scripts/
 
-# Make scripts executable
-RUN chmod +x /scripts/*.sh
-
 # Expose webhook port
 EXPOSE 9000
 
-# Run webhook
-CMD ["-hooks", "/etc/webhook/hooks.json", "-verbose", "-port", "9000", "-hotreload"]
+# Make scripts executable and run webhook
+CMD chmod +x /scripts/*.sh && webhook -hooks /etc/webhook/hooks.json -verbose -port 9000 -hotreload

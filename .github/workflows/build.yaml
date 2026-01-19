@@ -1,0 +1,12 @@
+name: airlabs-realtime-flight
+on: 
+  push:
+    branches:
+      - main
+  
+jobs:
+  docker: 
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3

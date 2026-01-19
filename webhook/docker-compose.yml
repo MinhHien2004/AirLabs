@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  webhook:
+    build: .
+    container_name: webhook-listener
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./hooks.json:/etc/webhook/hooks.json:ro
+      - ./scripts:/scripts:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+    networks:
+      - webhook-network
+
+networks:
+  webhook-network:
+    driver: bridge

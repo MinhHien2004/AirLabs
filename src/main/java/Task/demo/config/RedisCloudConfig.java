@@ -67,7 +67,7 @@ public class RedisCloudConfig {
         
         // Socket options cho kết nối nhanh hơn
         SocketOptions socketOptions = SocketOptions.builder()
-                .connectTimeout(Duration.ofSeconds(3))
+                .connectTimeout(Duration.ofSeconds(15))  // Tăng timeout lên 15s cho Redis Cloud
                 .keepAlive(true)
                 .tcpNoDelay(true)  // Tắt Nagle algorithm
                 .build();
@@ -103,8 +103,8 @@ public class RedisCloudConfig {
                 clientConfigBuilder.build()
         );
         
-        // Eager init để warm up connection pool khi startup
-        factory.setEagerInitialization(true);
+        // TẮT Eager init để không block startup nếu Redis chậm
+        factory.setEagerInitialization(false);
         
         return factory;
     }

@@ -6,6 +6,10 @@ target/
 
 ### Node modules ###
 node_modules/
+dist/
+
+# Keep build output in static folder for Spring Boot
+# !src/main/resources/static/
 
 ### STS ###
 .apt_generated

@@ -23,8 +23,6 @@ public class HealthController {
         return ResponseEntity.ok(response);
     }
     
-    @GetMapping("/")
-    public ResponseEntity<Map<String, Object>> root() {
-        return health();
-    }
+    // XÓA mapping "/" để Spring Boot serve index.html từ /static
+    // Route "/" giờ sẽ tự động serve index.html nhờ WebConfig
 }

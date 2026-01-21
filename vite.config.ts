@@ -6,9 +6,11 @@ export default defineConfig({
   root: '.',
   publicDir: 'public',
   build: {
-    outDir: 'dist',
+    outDir: 'src/main/resources/static',  // Build trực tiếp vào Spring Boot static folder
+    emptyOutDir: true,  // Xóa folder cũ trước khi build
   },
   server: {
+    port: 3000,
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

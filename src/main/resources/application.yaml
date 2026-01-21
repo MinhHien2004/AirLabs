@@ -59,10 +59,10 @@ spring:
       username: ${SPRING_REDIS_USERNAME:default}
       password: ${SPRING_REDIS_PASSWORD:fvKhVJ2XXByDWhOnUvVWvIeYnnMOPKTy}
       ssl:
-        enabled: false  # Tắt SSL nếu dùng Redis local
-        bundle: null  # Không dùng SSL bundle tùy chỉnh
-      timeout: 5000ms          # Giảm timeout
-      connect-timeout: 3000ms  # Giảm connect timeout
+        enabled: false   # Redis Cloud này không dùng SSL
+        bundle: null
+      timeout: 10000ms          # Tăng timeout lên 10s
+      connect-timeout: 10000ms  # Tăng connect timeout lên 10s
       client-type: lettuce
       lettuce:
         pool:
@@ -70,7 +70,7 @@ spring:
           max-active: 16       # Tăng max active connections
           max-idle: 8
           min-idle: 2          # Giữ sẵn 2 connections
-          max-wait: 2000ms     # Max wait 2s
+          max-wait: 5000ms     # Max wait 5s
         shutdown-timeout: 100ms
 
 airlabs.api:

@@ -19,7 +19,7 @@
     "noEmit": true
   },
   "include": [
-    "src/main/java/Task/demo/frontend"
+    "frontend"
   ],
   "exclude": [
     "node_modules"

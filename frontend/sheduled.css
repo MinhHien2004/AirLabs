@@ -150,3 +150,20 @@ tr:hover {
     font-size: 12px;
     margin-left: 5px;
 }
+.countdown-timer {
+    display: flex;
+    align-items: center;
+    margin-left: 20px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#countdownDisplay {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    color: #4CAF50;
+    letter-spacing: 2px;
+}

@@ -19,9 +19,12 @@
     "noEmit": true
   },
   "include": [
-    "frontend"
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "src/main",
+    "src/test"
   ]
 }

@@ -22,7 +22,7 @@ const Scheduled: React.FC = () => {
   const [departures, setDepartures] = useState<Flight[]>([]);
   
   // Backend API URL - Spring Boot chạy trên port 8080
-  const API_BASE_URL = 'http://localhost:8080';
+  const API_BASE_URL = '';
   
   const getApiUrl = (endpoint: string) => {
     return `${API_BASE_URL}/api/schedules${endpoint}`;
@@ -169,7 +169,7 @@ const Scheduled: React.FC = () => {
         <input
           type="text"
           className="iata"
-          placeholder="Press the airport iata"
+          placeholder="Press the airport iata kkk"
           value={iata}
           onChange={handleIataChange}
         />

@@ -1,7 +1,0 @@
-# Ignore environment-specific files
-.env
-*.log
-
-# Ignore backup files
-*.bak
-*~

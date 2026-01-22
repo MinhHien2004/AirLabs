@@ -1,6 +1,24 @@
-# Stage 1: Build stage
-FROM maven:3.9-eclipse-temurin-17 AS build
+# Stage 1: Build Frontend
+FROM node:20-alpine AS frontend-build
 
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci --silent
+
+# Copy frontend source files
+COPY index.html vite.config.ts tsconfig.json tailwind.config.cjs postcss.config.js ./
+COPY src/App.tsx src/index.tsx src/index.css src/Scheduled.tsx src/Scheduled.css ./src/
+COPY public ./public
+
+# Build frontend
+RUN npm run build
+
+# Stage 2: Build Backend
+FROM maven:3.9-eclipse-temurin-17 AS build
 
 WORKDIR /app
 
@@ -8,11 +26,18 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
-# Copy source code và build
-COPY src ./src
+# Copy Java source code
+COPY src/main/java ./src/main/java
+COPY src/main/resources/application.yaml ./src/main/resources/
+COPY src/test ./src/test
+
+# Copy built frontend from frontend-build stage
+COPY --from=frontend-build /app/src/main/resources/static ./src/main/resources/static
+
+# Build Java application
 RUN mvn clean package -DskipTests
 
-# Stage 2: Create image
+# Stage 3: Create runtime image
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app

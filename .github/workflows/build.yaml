@@ -37,9 +37,19 @@ jobs:
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: hienminh1332004/airlabs-realtime-flight:latest
+          tags: |
+            hienminh1332004/airlabs-realtime-flight:${{ github.sha }}
+            hienminh1332004/airlabs-realtime-flight:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
          
       - name: Verify
         run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - name: Notify server to deploy
+        run: |
+          curl -X POST http://3.88.65.140:9000/hooks/deploy-airlabs \
+            -H "Content-Type: application/json" \
+            -d '{
+              "image": "hienminh1332004/airlabs-realtime-flight:${{ github.sha }}"
+            }'

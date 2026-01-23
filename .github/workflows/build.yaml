@@ -37,9 +37,7 @@ jobs:
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: |
-            hienminh1332004/airlabs-realtime-flight:${{ github.sha }}
-            hienminh1332004/airlabs-realtime-flight:latest
+          tags: hienminh1332004/airlabs-realtime-flight:${{ github.sha }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
          

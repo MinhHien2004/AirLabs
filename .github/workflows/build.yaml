@@ -37,12 +37,17 @@ jobs:
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: hienminh1332004/airlabs-realtime-flight:${{ github.sha }}
+          tags: |
+            hienminh1332004/airlabs-realtime-flight:${{ github.sha }}
+            hienminh1332004/airlabs-realtime-flight:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
          
       - name: Verify
         run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - name: Wait for image to be available
+        run: sleep 10
 
       - name: Notify server to deploy
         run: |

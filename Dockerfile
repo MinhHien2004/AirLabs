@@ -11,7 +11,7 @@ RUN npm ci --silent
 
 # Copy frontend source files
 COPY index.html vite.config.ts tsconfig.json tailwind.config.cjs postcss.config.js ./
-COPY src/App.tsx src/index.tsx src/index.css src/Scheduled.tsx src/Scheduled.css ./src/
+COPY src ./src
 COPY public ./public
 
 # Build frontend

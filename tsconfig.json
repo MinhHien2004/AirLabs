@@ -19,12 +19,9 @@
     "noEmit": true
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*"
   ],
   "exclude": [
-    "node_modules",
-    "src/main",
-    "src/test"
+    "node_modules"
   ]
 }

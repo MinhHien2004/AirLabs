@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-IMAGE_NAME="hienminh1332004/airlabs-app:latest"
+IMAGE_NAME="hienminh1332004/airlabs-realtime-flight:latest"
 CONTAINER_NAME="airlabs-app"
 PORT="8080"
 

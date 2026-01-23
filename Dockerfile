@@ -14,7 +14,7 @@ COPY index.html vite.config.ts tsconfig.json tailwind.config.cjs postcss.config.
 COPY src ./src
 COPY public ./public
 
-# Build frontend
+# Build frontend - Vite sẽ build vào /app/src/main/resources/static
 RUN npm run build
 
 # Stage 2: Build Backend

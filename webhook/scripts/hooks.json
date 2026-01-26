@@ -1,0 +1,22 @@
+[
+  {
+    "id": "deploy-airlabs",
+    "execute-command": "/home/ubuntu/deploy.sh",
+    "command-working-directory": "/home/ubuntu",
+    "pass-arguments-to-command": [
+      {
+        "source": "payload",
+        "name": "image"
+      },
+      {
+        "source": "payload",
+        "name": "environment"
+      },
+      {
+        "source": "payload",
+        "name": "port"
+      }
+    ],
+    "response-message": "Deployment started successfully"
+  }
+]

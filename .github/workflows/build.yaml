@@ -34,10 +34,12 @@ jobs:
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
       - name: Setup Docker Buildx
+        if: github.base_ref == 'QA'
         uses: docker/setup-buildx-action@v3
         id: buildx
 
       - name: Cache Docker Image Layers
+        if: github.base_ref == 'QA'
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -47,6 +49,7 @@ jobs:
             ${{ runner.os }}-buildx-
 
       - name: Build and Push Docker Image
+        if: github.base_ref == 'QA'
         uses: docker/build-push-action@v5
         id: docker_build
         with:
@@ -61,7 +64,8 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
          
-      - name: Verify
+      - name: Verify build (QA only)
+        if: github.base_ref == 'QA'
         run: |
           echo "Digest: ${{ steps.docker_build.outputs.digest }}"
           echo "Image built and available locally"
@@ -69,7 +73,7 @@ jobs:
 
       - name: Deploy directly (no webhook needed)
         env:
-          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
+          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ github.base_ref == 'QA' && format('{0}-v0.0.{1}', steps.env.outputs.tag_prefix, github.run_number) || 'qa-latest' }}
           ENVIRONMENT: ${{ steps.env.outputs.environment }}
           PORT: ${{ steps.env.outputs.port }}
           CONTAINER_NAME: airlabs-app-${{ steps.env.outputs.environment }}
@@ -79,7 +83,9 @@ jobs:
           echo "Environment: $ENVIRONMENT"
           echo "Port: $PORT"
           
-          # Image đã có sẵn từ build step, không cần pull
+          # Pull image từ Docker Hub
+          echo "Pulling image from Docker Hub..."
+          docker pull $IMAGE
           
           # Stop old container
           docker stop $CONTAINER_NAME 2>/dev/null || true

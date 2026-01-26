@@ -2,7 +2,8 @@ name: airlabs-realtime-flight
 on: 
   push:
     branches:
-      - main
+      - QA
+      - Production
   
 jobs:
   docker: 
@@ -11,6 +12,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set environment variables
+        id: env
+        run: |
+          if ["{{ github.ref}}" == "ref/heads/QA"]; then
+            echo "environment=qa" >> $GITHUB_OUTPUT
+            echo "port=8081" >> $GITHUB_OUTPUT
+            echo "tag_prefix=qa" >> $GITHUB_OUTPUT
+          elif ["{{ github.ref}}" == "ref/heads/Production"]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "port=8080" >> $GITHUB_OUTPUT
+            echo "tag_prefix=prod" >> $GITHUB_OUTPUT
+          fi
       - name: Login Docker Hub
         uses: docker/login-action@v3
         with:
@@ -25,9 +38,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-${{ steps.env.outputs.environment }}-${{ github.sha}}
           restore-keys: |
-            ${{ runner.os }}-buildx-
+            ${{ runner.os }}-buildx-${{ steps.env.outputs.environment}}-
+            ${{ runner.os}}-buildx-
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
@@ -38,8 +52,8 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           push: true
           tags: |
-            hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}
-            hienminh1332004/airlabs-realtime-flight:latest
+            hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
+            hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
          
@@ -54,5 +68,7 @@ jobs:
           curl -X POST http://3.88.65.140:9000/hooks/deploy-airlabs \
             -H "Content-Type: application/json" \
             -d '{
-              "image": "hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}"
+              "image": "hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}",
+              "environment": "${{ steps.env.outputs.environment }}",
+              "port": "${{ steps.env.outputs.port}}"
             }'

@@ -38,7 +38,7 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           push: true
           tags: |
-            hienminh1332004/airlabs-realtime-flight:${{ github.sha }}
+            hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}
             hienminh1332004/airlabs-realtime-flight:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
@@ -54,5 +54,5 @@ jobs:
           curl -X POST http://3.88.65.140:9000/hooks/deploy-airlabs \
             -H "Content-Type: application/json" \
             -d '{
-              "image": "hienminh1332004/airlabs-realtime-flight:${{ github.sha }}"
+              "image": "hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}"
             }'

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './Scheduled.css';
 
 interface Flight {
@@ -21,8 +21,9 @@ const Scheduled: React.FC = () => {
   const [arrivals, setArrivals] = useState<Flight[]>([]);
   const [departures, setDepartures] = useState<Flight[]>([]);
   
-  // Backend API URL - Spring Boot chạy trên port 8080
-  const API_BASE_URL = '';
+  // Backend API URL - ưu tiên lấy từ biến môi trường Vite nếu có
+  const apiBaseUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+  const API_BASE_URL = apiBaseUrl && apiBaseUrl.trim().length > 0 ? apiBaseUrl.trim() : '';
   
   const getApiUrl = (endpoint: string) => {
     return `${API_BASE_URL}/api/schedules${endpoint}`;
@@ -169,7 +170,7 @@ const Scheduled: React.FC = () => {
         <input
           type="text"
           className="iata"
-          placeholder="Test merge 2"
+          placeholder="Test merge 4"
           value={iata}
           onChange={handleIataChange}
         />

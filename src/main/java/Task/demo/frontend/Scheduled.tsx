@@ -170,7 +170,7 @@ const Scheduled: React.FC = () => {
         <input
           type="text"
           className="iata"
-          placeholder="Test merge 9"
+          placeholder="KKK"
           value={iata}
           onChange={handleIataChange}
         />

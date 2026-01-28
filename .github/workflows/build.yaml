@@ -10,12 +10,16 @@ jobs:
   docker: 
     if: github.event.pull_request.merged == true
     runs-on: self-hosted
+    timeout-minutes: 30
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        timeout-minutes: 5
 
       - name: Set environment variables
         id: env
+        timeout-minutes: 2
         run: |
           if [ "${{ github.base_ref }}" == "QA" ]; then
             echo "environment=qa" >> $GITHUB_OUTPUT
@@ -29,16 +33,19 @@ jobs:
 
       - name: Login Docker Hub
         uses: docker/login-action@v3
+        timeout-minutes: 3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
+        timeout-minutes: 3
         id: buildx
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
+        timeout-minutes: 15
         id: docker_build
         with:
           context: .
@@ -54,6 +61,7 @@ jobs:
             BUILDKIT_INLINE_CACHE=1
          
       - name: Verify build
+        timeout-minutes: 2
         run: |
           echo "Image pushed successfully!"
           echo "Digest: ${{ steps.docker_build.outputs.digest }}"
@@ -62,6 +70,7 @@ jobs:
           echo "  - hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-latest"
 
       - name: Deploy directly
+        timeout-minutes: 10
         env:
           IMAGE: hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
           ENVIRONMENT: ${{ steps.env.outputs.environment }}
@@ -111,6 +120,7 @@ jobs:
             tail -n +4 | xargs -r docker rmi 2>/dev/null || true
 
       - name: Health check
+        timeout-minutes: 3
         run: |
           MAX_RETRIES=10
           RETRY_COUNT=0

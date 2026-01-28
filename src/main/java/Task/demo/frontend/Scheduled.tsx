@@ -21,7 +21,7 @@ const Scheduled: React.FC = () => {
   const [arrivals, setArrivals] = useState<Flight[]>([]);
   const [departures, setDepartures] = useState<Flight[]>([]);
   
-  // Backend API URL - ưu tiên lấy từ biến môi trường Vite nếu có
+  // Backend API URL - ưu tiên lấy từ biến môi trường Vite nếu có (v1.0.1)
   const apiBaseUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
   const API_BASE_URL = apiBaseUrl && apiBaseUrl.trim().length > 0 ? apiBaseUrl.trim() : '';
   

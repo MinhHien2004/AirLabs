@@ -21,7 +21,7 @@ const Scheduled: React.FC = () => {
   const [arrivals, setArrivals] = useState<Flight[]>([]);
   const [departures, setDepartures] = useState<Flight[]>([]);
   
-  // Backend API URL - ưu tiên lấy từ biến môi trường Vite nếu có (v1.0.1)
+  // Backend API URL - ưu tiên lấy từ biến môi trường Vite nếu có (v1.0.2 - UI Update)
   const apiBaseUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
   const API_BASE_URL = apiBaseUrl && apiBaseUrl.trim().length > 0 ? apiBaseUrl.trim() : '';
   
@@ -166,16 +166,17 @@ const Scheduled: React.FC = () => {
 
   return (
     <div className="scheduled-container">
+      <h1 className="page-title">✈️ Flight Information System</h1>
       <div className="header">
         <input
           type="text"
           className="iata"
-          placeholder="KKK"
+          placeholder="Enter IATA Code (e.g. HAN, SGN)"
           value={iata}
           onChange={handleIataChange}
         />
         <button className="refresh-btn" onClick={handleRefresh}>
-          Refresh
+          🔄 Refresh
         </button>
     </div>
 
@@ -187,7 +188,7 @@ const Scheduled: React.FC = () => {
               <span className="dot yellow"></span>
               <span className="dot green"></span>
             </div>
-            <span>Arrivals {iata}</span>
+            <span>📥 Arrivals - {iata || 'Select Airport'}</span>
           </div>
 
           <table>
@@ -211,7 +212,7 @@ const Scheduled: React.FC = () => {
               <span className="dot yellow"></span>
               <span className="dot green"></span>
             </div>
-            <span>Departures {iata}</span>
+            <span>📤 Departures - {iata || 'Select Airport'}</span>
           </div>
 
           <table>

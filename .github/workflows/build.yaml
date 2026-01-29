@@ -34,22 +34,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
       - name: Setup Docker Buildx
-        if: github.base_ref == 'QA'
         uses: docker/setup-buildx-action@v3
         id: buildx
 
-      - name: Cache Docker Image Layers
-        if: github.base_ref == 'QA'
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ steps.env.outputs.environment }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ steps.env.outputs.environment }}-
-            ${{ runner.os }}-buildx-
-
       - name: Build and Push Docker Image
-        if: github.base_ref == 'QA'
         uses: docker/build-push-action@v5
         id: docker_build
         with:
@@ -57,23 +45,25 @@ jobs:
           file: ./Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          load: true
           tags: |
             hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
             hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
+          cache-from: type=registry,ref=hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-buildcache
+          cache-to: type=registry,ref=hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-buildcache,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
          
-      - name: Verify build (QA only)
-        if: github.base_ref == 'QA'
+      - name: Verify build
         run: |
+          echo "Image pushed successfully!"
           echo "Digest: ${{ steps.docker_build.outputs.digest }}"
-          echo "Image built and available locally"
-          docker images | grep airlabs-realtime-flight
+          echo "Tags:"
+          echo "  - hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}"
+          echo "  - hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-latest"
 
-      - name: Deploy directly (no webhook needed)
+      - name: Deploy directly
         env:
-          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ github.base_ref == 'QA' && format('{0}-v0.0.{1}', steps.env.outputs.tag_prefix, github.run_number) || 'qa-latest' }}
+          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
           ENVIRONMENT: ${{ steps.env.outputs.environment }}
           PORT: ${{ steps.env.outputs.port }}
           CONTAINER_NAME: airlabs-app-${{ steps.env.outputs.environment }}

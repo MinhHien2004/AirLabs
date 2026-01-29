@@ -166,7 +166,7 @@ const Scheduled: React.FC = () => {
 
   return (
     <div className="scheduled-container">
-      <h1 className="page-title">✈️ Flight Information System</h1>
+      <h1 className="page-title">✈️ Real-time Flight Information System</h1>
       <div className="header">
         <input
           type="text"

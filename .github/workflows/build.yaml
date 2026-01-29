@@ -7,25 +7,22 @@ on:
       - Production
   
 jobs:
-  docker: 
-    if: github.event.pull_request.merged == true
+  # ===========================================
+  # JOB 1: Build & Push (CHỈ khi merge vào QA)
+  # ===========================================
+  build-and-push:
+    if: github.event.pull_request.merged == true && github.base_ref == 'QA'
     runs-on: self-hosted
+    outputs:
+      image_tag: ${{ steps.set_tag.outputs.image_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set environment variables
-        id: env
+      - name: Set image tag
+        id: set_tag
         run: |
-          if [ "${{ github.base_ref }}" == "QA" ]; then
-            echo "environment=qa" >> $GITHUB_OUTPUT
-            echo "port=8081" >> $GITHUB_OUTPUT
-            echo "tag_prefix=qa" >> $GITHUB_OUTPUT
-          elif [ "${{ github.base_ref }}" == "Production" ]; then
-            echo "environment=production" >> $GITHUB_OUTPUT
-            echo "port=8080" >> $GITHUB_OUTPUT
-            echo "tag_prefix=prod" >> $GITHUB_OUTPUT
-          fi
+          echo "image_tag=v0.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
 
       - name: Login Docker Hub
         uses: docker/login-action@v3
@@ -46,10 +43,10 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           push: true
           tags: |
-            hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
-            hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-latest
-          cache-from: type=registry,ref=hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-buildcache
-          cache-to: type=registry,ref=hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-buildcache,mode=max
+            hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}
+            hienminh1332004/airlabs-realtime-flight:qa-latest
+          cache-from: type=registry,ref=hienminh1332004/airlabs-realtime-flight:buildcache
+          cache-to: type=registry,ref=hienminh1332004/airlabs-realtime-flight:buildcache,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
          
@@ -58,17 +55,31 @@ jobs:
           echo "Image pushed successfully!"
           echo "Digest: ${{ steps.docker_build.outputs.digest }}"
           echo "Tags:"
-          echo "  - hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}"
-          echo "  - hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-latest"
+          echo "  - hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}"
+          echo "  - hienminh1332004/airlabs-realtime-flight:qa-latest"
 
-      - name: Deploy directly
+  # ===========================================
+  # JOB 2: Deploy to QA (sau khi build xong)
+  # ===========================================
+  deploy-qa:
+    if: github.event.pull_request.merged == true && github.base_ref == 'QA'
+    needs: build-and-push
+    runs-on: self-hosted
+    steps:
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+      - name: Deploy to QA
         env:
-          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}-v0.0.${{ github.run_number }}
-          ENVIRONMENT: ${{ steps.env.outputs.environment }}
-          PORT: ${{ steps.env.outputs.port }}
-          CONTAINER_NAME: airlabs-app-${{ steps.env.outputs.environment }}
+          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ needs.build-and-push.outputs.image_tag }}
+          ENVIRONMENT: qa
+          PORT: 8081
+          CONTAINER_NAME: airlabs-app-qa
         run: |
-          echo "Starting deployment..."
+          echo "Starting deployment to QA..."
           echo "Image: $IMAGE"
           echo "Environment: $ENVIRONMENT"
           echo "Port: $PORT"
@@ -107,14 +118,119 @@ jobs:
           
           # Cleanup old images (keep last 3)
           docker images --format "{{.Repository}}:{{.Tag}}" | \
-            grep "airlabs-realtime-flight:${{ steps.env.outputs.tag_prefix }}" | \
+            grep "airlabs-realtime-flight:v0.0" | \
             tail -n +4 | xargs -r docker rmi 2>/dev/null || true
 
-      - name: Health check
+      - name: Health check QA
         run: |
           MAX_RETRIES=10
           RETRY_COUNT=0
-          PORT=${{ steps.env.outputs.port }}
+          PORT=8081
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/actuator/health || echo "000")
+            
+            if [ "$HTTP_CODE" -eq 200 ]; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            
+            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Status: $HTTP_CODE"
+            sleep 3
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          done
+          
+          echo "Health check failed!"
+          exit 1
+
+  # =====================================================
+  # JOB 3: Deploy to Production (KHÔNG build lại image)
+  # Chỉ lấy image qa-latest đã được test ở QA
+  # =====================================================
+  deploy-production:
+    if: github.event.pull_request.merged == true && github.base_ref == 'Production'
+    runs-on: self-hosted
+    steps:
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+      - name: Get QA image and tag for Production
+        id: get_image
+        run: |
+          # Lấy image qa-latest đã được test
+          QA_IMAGE="hienminh1332004/airlabs-realtime-flight:qa-latest"
+          PROD_TAG="prod-v0.0.${{ github.run_number }}"
+          
+          echo "Pulling QA image: $QA_IMAGE"
+          docker pull $QA_IMAGE
+          
+          # Tag lại image cho Production (không build mới)
+          docker tag $QA_IMAGE hienminh1332004/airlabs-realtime-flight:$PROD_TAG
+          docker tag $QA_IMAGE hienminh1332004/airlabs-realtime-flight:prod-latest
+          
+          # Push production tags
+          docker push hienminh1332004/airlabs-realtime-flight:$PROD_TAG
+          docker push hienminh1332004/airlabs-realtime-flight:prod-latest
+          
+          echo "image=hienminh1332004/airlabs-realtime-flight:$PROD_TAG" >> $GITHUB_OUTPUT
+          
+          echo "Production image tagged and pushed successfully!"
+          echo "  - hienminh1332004/airlabs-realtime-flight:$PROD_TAG"
+          echo "  - hienminh1332004/airlabs-realtime-flight:prod-latest"
+
+      - name: Deploy to Production
+        env:
+          IMAGE: ${{ steps.get_image.outputs.image }}
+          ENVIRONMENT: production
+          PORT: 8080
+          CONTAINER_NAME: airlabs-app-production
+        run: |
+          echo "Starting deployment to Production..."
+          echo "Image: $IMAGE (same as QA, no rebuild!)"
+          echo "Environment: $ENVIRONMENT"
+          echo "Port: $PORT"
+          
+          # Stop old container
+          docker stop $CONTAINER_NAME 2>/dev/null || true
+          docker rm $CONTAINER_NAME 2>/dev/null || true
+          
+          # Run new container
+          docker run -d \
+            --name $CONTAINER_NAME \
+            --restart unless-stopped \
+            -p $PORT:8080 \
+            -e SPRING_PROFILES_ACTIVE=$ENVIRONMENT \
+            -e REDIS_HOST=${{ secrets.REDIS_HOST }} \
+            -e REDIS_PORT=${{ secrets.REDIS_PORT }} \
+            -e REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
+            -e AIRLABS_API_KEY=${{ secrets.AIRLABS_API_KEY }} \
+            $IMAGE
+          
+          # Verify deployment
+          sleep 5
+          if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+            echo "Deployment successful!"
+            docker ps | grep $CONTAINER_NAME
+            docker logs --tail 20 $CONTAINER_NAME
+          else
+            echo "Deployment failed!"
+            docker logs $CONTAINER_NAME
+            exit 1
+          fi
+          
+          # Cleanup old images (keep last 3)
+          docker images --format "{{.Repository}}:{{.Tag}}" | \
+            grep "airlabs-realtime-flight:prod" | \
+            tail -n +4 | xargs -r docker rmi 2>/dev/null || true
+
+      - name: Health check Production
+        run: |
+          MAX_RETRIES=10
+          RETRY_COUNT=0
+          PORT=8080
           
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/actuator/health || echo "000")

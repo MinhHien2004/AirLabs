@@ -58,96 +58,24 @@ jobs:
           echo "  - hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}"
           echo "  - hienminh1332004/airlabs-realtime-flight:qa-latest"
 
-  # ===========================================
-  # JOB 2: Deploy to QA (sau khi build xong)
-  # ===========================================
-  deploy-qa:
-    if: github.event.pull_request.merged == true && github.base_ref == 'QA'
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Login Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-
-      - name: Deploy to QA
-        env:
-          IMAGE: hienminh1332004/airlabs-realtime-flight:${{ needs.build-and-push.outputs.image_tag }}
-          ENVIRONMENT: qa
-          PORT: 8081
-          CONTAINER_NAME: airlabs-app-qa
+      - name: Trigger QA Deployment
         run: |
-          echo "Starting deployment to QA..."
-          echo "Image: $IMAGE"
-          echo "Environment: $ENVIRONMENT"
-          echo "Port: $PORT"
+          echo "Triggering QA deployment via webhook..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"event": "deploy", "environment": "qa", "tag": "v0.0.${{ github.run_number }}"}' \
+            http://3.88.65.140:9001/deploy/qa)
           
-          # Pull image từ Docker Hub
-          echo "Pulling image from Docker Hub..."
-          docker pull $IMAGE
-          
-          # Stop old container
-          docker stop $CONTAINER_NAME 2>/dev/null || true
-          docker rm $CONTAINER_NAME 2>/dev/null || true
-          
-          # Run new container
-          docker run -d \
-            --name $CONTAINER_NAME \
-            --restart unless-stopped \
-            -p $PORT:8080 \
-            -e SPRING_PROFILES_ACTIVE=$ENVIRONMENT \
-            -e REDIS_HOST=${{ secrets.REDIS_HOST }} \
-            -e REDIS_PORT=${{ secrets.REDIS_PORT }} \
-            -e REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
-            -e AIRLABS_API_KEY=${{ secrets.AIRLABS_API_KEY }} \
-            $IMAGE
-          
-          # Verify deployment
-          sleep 5
-          if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
-            echo "Deployment successful!"
-            docker ps | grep $CONTAINER_NAME
-            docker logs --tail 20 $CONTAINER_NAME
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Webhook triggered successfully!"
           else
-            echo "Deployment failed!"
-            docker logs $CONTAINER_NAME
-            exit 1
+            echo "⚠️ Webhook returned: $RESPONSE (deployment may still proceed)"
           fi
-          
-          # Cleanup old images (keep last 3)
-          docker images --format "{{.Repository}}:{{.Tag}}" | \
-            grep "airlabs-realtime-flight:v0.0" | \
-            tail -n +4 | xargs -r docker rmi 2>/dev/null || true
-
-      - name: Health check QA
-        run: |
-          MAX_RETRIES=10
-          RETRY_COUNT=0
-          PORT=8081
-          
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/actuator/health || echo "000")
-            
-            if [ "$HTTP_CODE" -eq 200 ]; then
-              echo "Health check passed!"
-              exit 0
-            fi
-            
-            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Status: $HTTP_CODE"
-            sleep 3
-            RETRY_COUNT=$((RETRY_COUNT + 1))
-          done
-          
-          echo "Health check failed!"
-          exit 1
 
   # =====================================================
-  # JOB 3: Deploy to Production (KHÔNG build lại image)
-  # Chỉ lấy image qa-latest đã được test ở QA
+  # JOB 2: Tag Production image (khi merge vào Production)
   # =====================================================
-  deploy-production:
+  tag-production:
     if: github.event.pull_request.merged == true && github.base_ref == 'Production'
     runs-on: ubuntu-latest
     steps:
@@ -157,8 +85,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
-      - name: Get QA image and tag for Production
-        id: get_image
+      - name: Tag QA image for Production
         run: |
           # Lấy image qa-latest đã được test
           QA_IMAGE="hienminh1332004/airlabs-realtime-flight:qa-latest"
@@ -175,75 +102,20 @@ jobs:
           docker push hienminh1332004/airlabs-realtime-flight:$PROD_TAG
           docker push hienminh1332004/airlabs-realtime-flight:prod-latest
           
-          echo "image=hienminh1332004/airlabs-realtime-flight:$PROD_TAG" >> $GITHUB_OUTPUT
-          
           echo "Production image tagged and pushed successfully!"
           echo "  - hienminh1332004/airlabs-realtime-flight:$PROD_TAG"
           echo "  - hienminh1332004/airlabs-realtime-flight:prod-latest"
 
-      - name: Deploy to Production
-        env:
-          IMAGE: ${{ steps.get_image.outputs.image }}
-          ENVIRONMENT: production
-          PORT: 8080
-          CONTAINER_NAME: airlabs-app-production
+      - name: Trigger Production Deployment
         run: |
-          echo "Starting deployment to Production..."
-          echo "Image: $IMAGE (same as QA, no rebuild!)"
-          echo "Environment: $ENVIRONMENT"
-          echo "Port: $PORT"
+          echo "Triggering Production deployment via webhook..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"event": "deploy", "environment": "production", "tag": "prod-v0.0.${{ github.run_number }}"}' \
+            http://3.88.65.140:9001/deploy/production)
           
-          # Stop old container
-          docker stop $CONTAINER_NAME 2>/dev/null || true
-          docker rm $CONTAINER_NAME 2>/dev/null || true
-          
-          # Run new container
-          docker run -d \
-            --name $CONTAINER_NAME \
-            --restart unless-stopped \
-            -p $PORT:8080 \
-            -e SPRING_PROFILES_ACTIVE=$ENVIRONMENT \
-            -e REDIS_HOST=${{ secrets.REDIS_HOST }} \
-            -e REDIS_PORT=${{ secrets.REDIS_PORT }} \
-            -e REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
-            -e AIRLABS_API_KEY=${{ secrets.AIRLABS_API_KEY }} \
-            $IMAGE
-          
-          # Verify deployment
-          sleep 5
-          if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
-            echo "Deployment successful!"
-            docker ps | grep $CONTAINER_NAME
-            docker logs --tail 20 $CONTAINER_NAME
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Webhook triggered successfully!"
           else
-            echo "Deployment failed!"
-            docker logs $CONTAINER_NAME
-            exit 1
+            echo "⚠️ Webhook returned: $RESPONSE (deployment may still proceed)"
           fi
-          
-          # Cleanup old images (keep last 3)
-          docker images --format "{{.Repository}}:{{.Tag}}" | \
-            grep "airlabs-realtime-flight:prod" | \
-            tail -n +4 | xargs -r docker rmi 2>/dev/null || true
-
-      - name: Health check Production
-        run: |
-          MAX_RETRIES=10
-          RETRY_COUNT=0
-          PORT=8080
-          
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/actuator/health || echo "000")
-            
-            if [ "$HTTP_CODE" -eq 200 ]; then
-              echo "Health check passed!"
-              exit 0
-            fi
-            
-            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Status: $HTTP_CODE"
-            sleep 3
-            RETRY_COUNT=$((RETRY_COUNT + 1))
-          done
-          
-          echo "Health check failed!"
-          exit 1

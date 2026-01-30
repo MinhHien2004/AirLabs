@@ -1,0 +1,17 @@
+[Unit]
+Description=AirLabs Webhook Server
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/airlabs
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="WEBHOOK_SECRET=your-webhook-secret"
+ExecStart=/usr/bin/python3 /opt/airlabs/webhook-server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

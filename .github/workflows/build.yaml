@@ -7,9 +7,6 @@ on:
       - Production
   
 jobs:
-  # ===========================================
-  # JOB 1: Build & Push (CHỈ khi merge vào QA)
-  # ===========================================
   build-and-push:
     if: github.event.pull_request.merged == true && github.base_ref == 'QA'
     runs-on: ubuntu-latest
@@ -67,14 +64,10 @@ jobs:
             http://3.88.65.140:9001/deploy/qa)
           
           if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Webhook triggered successfully!"
+            echo "Webhook triggered successfully!"
           else
-            echo "⚠️ Webhook returned: $RESPONSE (deployment may still proceed)"
+            echo "Webhook returned: $RESPONSE (deployment may still proceed)"
           fi
-
-  # =====================================================
-  # JOB 2: Tag Production image (khi merge vào Production)
-  # =====================================================
   tag-production:
     if: github.event.pull_request.merged == true && github.base_ref == 'Production'
     runs-on: ubuntu-latest
@@ -115,7 +108,7 @@ jobs:
             http://3.88.65.140:9001/deploy/production)
           
           if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Webhook triggered successfully!"
+            echo "Webhook triggered successfully!"
           else
-            echo "⚠️ Webhook returned: $RESPONSE (deployment may still proceed)"
+            echo "Webhook returned: $RESPONSE (deployment may still proceed)"
           fi

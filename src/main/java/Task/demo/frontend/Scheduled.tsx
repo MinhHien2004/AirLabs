@@ -166,12 +166,12 @@ const Scheduled: React.FC = () => {
 
   return (
     <div className="scheduled-container">
-      <h1 className="page-title">✈️ Flight Information System</h1>
+      <h1 className="page-title">✈️ Real-time Flight Information System</h1>
       <div className="header">
         <input
           type="text"
           className="iata"
-          placeholder="Enter IATA Code (e.g. HAN, SGN)"
+          placeholder="Enter IATA Code "
           value={iata}
           onChange={handleIataChange}
         />

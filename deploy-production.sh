@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# ==============================================
-# Script deploy Production trên server EC2
-# Chạy script này trên server sau khi merge PR vào Production
-# ==============================================
-
 set -e
 
 echo "=========================================="
@@ -12,27 +7,20 @@ echo "Starting Production Deployment"
 echo "=========================================="
 
 # Configuration
-IMAGE="hienminh1332004/airlabs-realtime-flight:prod-latest"
+IMAGE_TAG="${1:-prod-latest}"  # Lấy tag từ parameter, default là prod-latest
+IMAGE="hienminh1332004/airlabs-realtime-flight:$IMAGE_TAG"
 CONTAINER_NAME="airlabs-app-production"
 PORT=8080
 ENVIRONMENT="production"
 
-# Docker Hub credentials (nên set trong environment hoặc .env file)
-# export DOCKERHUB_USERNAME="your-username"
-# export DOCKERHUB_TOKEN="your-token"
-
-# Application secrets (nên set trong environment hoặc .env file)
-# export REDIS_HOST="your-redis-host"
-# export REDIS_PORT="your-redis-port"
-# export REDIS_PASSWORD="your-redis-password"
-# export AIRLABS_API_KEY="your-api-key"
+echo "Deploying with image tag: $IMAGE_TAG"
 
 # Login Docker Hub
 echo "Logging in to Docker Hub..."
 if [ -n "$DOCKERHUB_TOKEN" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
     echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 else
-    echo "⚠️  DOCKERHUB credentials not found. Assuming already logged in or using public image."
+    echo "DOCKERHUB credentials not found. Assuming already logged in or using public image."
 fi
 
 # Pull latest image
@@ -63,13 +51,13 @@ sleep 5
 
 # Verify deployment
 if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
-    echo "✅ Deployment successful!"
+    echo "Deployment successful!"
     docker ps | grep $CONTAINER_NAME
     echo ""
     echo "Container logs:"
     docker logs --tail 20 $CONTAINER_NAME
 else
-    echo "❌ Deployment failed!"
+    echo "Deployment failed!"
     docker logs $CONTAINER_NAME
     exit 1
 fi
@@ -84,7 +72,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/actuator/health 2>/dev/null || echo "000")
     
     if [ "$HTTP_CODE" -eq 200 ]; then
-        echo "✅ Health check passed!"
+        echo "Health check passed!"
         echo ""
         echo "=========================================="
         echo "Production Deployment completed successfully!"
@@ -98,7 +86,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     RETRY_COUNT=$((RETRY_COUNT + 1))
 done
 
-echo "⚠️  Health check failed after $MAX_RETRIES attempts"
+echo "Health check failed after $MAX_RETRIES attempts"
 echo "Container is running but health endpoint is not responding"
 exit 1
 

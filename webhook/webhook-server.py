@@ -75,10 +75,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         # Xử lý theo path
         if self.path == '/deploy/qa':
             log("Triggering QA deployment...")
-            self.trigger_deploy('qa')
+            tag = data.get('tag', 'latest')
+            self.trigger_deploy('qa', tag)
         elif self.path == '/deploy/production':
             log("Triggering Production deployment...")
-            self.trigger_deploy('production')
+            tag = data.get('tag', 'prod-latest')
+            self.trigger_deploy('production', tag)
         elif self.path == '/webhook':
             # Auto-detect từ GitHub workflow dispatch hoặc PR merge event
             self.handle_github_webhook(data, event)
@@ -119,14 +121,21 @@ class WebhookHandler(BaseHTTPRequestHandler):
         elif event == 'ping':
             log("Ping received - webhook is configured correctly!")
     
-    def trigger_deploy(self, environment):
-        """Chạy script deploy"""
+    def trigger_deploy(self, environment, tag=None):
+        """Chạy script deploy với tag cụ thể"""
         script = DEPLOY_QA_SCRIPT if environment == 'qa' else DEPLOY_PRODUCTION_SCRIPT
         
         try:
-            log(f"Running: {script}")
+            # Thêm tag vào command nếu có
+            cmd = [script]
+            if tag:
+                cmd.append(tag)
+                log(f"Running: {script} {tag}")
+            else:
+                log(f"Running: {script}")
+                
             result = subprocess.run(
-                [script],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minutes timeout

@@ -82,5 +82,25 @@ management:
   health:
     redis:
       enabled: false
+
+nats:
+  url: nats://localhost:4222
+  user: admin
+  password: admin123
+  connection:
+    timeout: 5000ms
+  reconnect:
+    wait: 2000ms
+    attempts: 10
+  max-pending-messages: 65536
+  max-payload: 1048576  # 1 MB
+  # cluster:
+  #   name: flight-cluster
+  # streaming:
+  #   cluster-id: flight-streaming
+  #   client-id: flight-client-1
+  #   ack-wait: 30000ms
+  #   max-in-flight: 20
+  #   durable-name: flight-durable
  
 

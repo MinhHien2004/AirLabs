@@ -41,7 +41,6 @@ jobs:
           push: true
           tags: |
             hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}
-            hienminh1332004/airlabs-realtime-flight:qa-latest
           cache-from: type=registry,ref=hienminh1332004/airlabs-realtime-flight:buildcache
           cache-to: type=registry,ref=hienminh1332004/airlabs-realtime-flight:buildcache,mode=max
           build-args: |
@@ -51,22 +50,22 @@ jobs:
         run: |
           echo "Image pushed successfully!"
           echo "Digest: ${{ steps.docker_build.outputs.digest }}"
-          echo "Tags:"
-          echo "  - hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}"
-          echo "  - hienminh1332004/airlabs-realtime-flight:qa-latest"
+          echo "Tag: hienminh1332004/airlabs-realtime-flight:v0.0.${{ github.run_number }}"
 
       - name: Trigger QA Deployment
+        continue-on-error: true
         run: |
           echo "Triggering QA deployment via webhook..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 -X POST \
             -H "Content-Type: application/json" \
             -d '{"event": "deploy", "environment": "qa", "tag": "v0.0.${{ github.run_number }}"}' \
-            http://3.88.65.140:9001/deploy/qa)
+            http://3.88.65.140:9001/deploy/qa || echo "000")
           
           if [ "$RESPONSE" = "200" ]; then
-            echo "Webhook triggered successfully!"
+            echo "✅ Webhook triggered successfully!"
           else
-            echo "Webhook returned: $RESPONSE (deployment may still proceed)"
+            echo "⚠️ Webhook returned: $RESPONSE"
+            echo "Deploy manually: ssh server -> cd /opt/airlabs && source .env && ./deploy-qa.sh v0.0.${{ github.run_number }}"
           fi
   tag-production:
     if: github.event.pull_request.merged == true && github.base_ref == 'Production'
@@ -78,13 +77,34 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
 
+      - name: Get Latest QA Tag
+        id: get_qa_tag
+        run: |
+          # Lấy tất cả tags từ Docker Hub và tìm tag v0.0.* mới nhất
+          echo "Fetching latest QA tag from Docker Hub..."
+          
+          LATEST_TAG=$(curl -s "https://hub.docker.com/v2/repositories/hienminh1332004/airlabs-realtime-flight/tags/?page_size=100" \
+            | jq -r '.results[].name' \
+            | grep '^v0\.0\.' \
+            | sort -V \
+            | tail -n1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "Error: No QA tag found!"
+            exit 1
+          fi
+          
+          echo "Latest QA tag: $LATEST_TAG"
+          echo "qa_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
       - name: Tag QA image for Production
         run: |
-          # Lấy image qa-latest đã được test
-          QA_IMAGE="hienminh1332004/airlabs-realtime-flight:qa-latest"
-          PROD_TAG="prod-v0.0.${{ github.run_number }}"
+          # Sử dụng tag QA mới nhất
+          QA_TAG="${{ steps.get_qa_tag.outputs.qa_tag }}"
+          QA_IMAGE="hienminh1332004/airlabs-realtime-flight:$QA_TAG"
+          PROD_TAG="prod-$QA_TAG"
           
-          echo "Pulling QA image: $QA_IMAGE"
+          echo "Using QA image: $QA_IMAGE"
           docker pull $QA_IMAGE
           
           # Tag lại image cho Production (không build mới)
@@ -96,19 +116,24 @@ jobs:
           docker push hienminh1332004/airlabs-realtime-flight:prod-latest
           
           echo "Production image tagged and pushed successfully!"
-          echo "  - hienminh1332004/airlabs-realtime-flight:$PROD_TAG"
-          echo "  - hienminh1332004/airlabs-realtime-flight:prod-latest"
+          echo "  - Source: $QA_IMAGE"
+          echo "  - Production: hienminh1332004/airlabs-realtime-flight:$PROD_TAG"
+          echo "  - Production: hienminh1332004/airlabs-realtime-flight:prod-latest"
 
       - name: Trigger Production Deployment
+        continue-on-error: true
         run: |
           echo "Triggering Production deployment via webhook..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+          QA_TAG="${{ steps.get_qa_tag.outputs.qa_tag }}"
+          PROD_TAG="prod-$QA_TAG"
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 -X POST \
             -H "Content-Type: application/json" \
-            -d '{"event": "deploy", "environment": "production", "tag": "prod-v0.0.${{ github.run_number }}"}' \
-            http://3.88.65.140:9001/deploy/production)
+            -d '{"event": "deploy", "environment": "production", "tag": "'"$PROD_TAG"'"}' \
+            http://3.88.65.140:9001/deploy/production || echo "000")
           
           if [ "$RESPONSE" = "200" ]; then
-            echo "Webhook triggered successfully!"
+            echo "Webhook triggered successfully with tag: $PROD_TAG"
           else
             echo "Webhook returned: $RESPONSE (deployment may still proceed)"
           fi

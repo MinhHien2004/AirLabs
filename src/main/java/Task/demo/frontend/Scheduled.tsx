@@ -166,68 +166,196 @@ const Scheduled: React.FC = () => {
 
   return (
     <div className="scheduled-container">
-      <h1 className="page-title">✈️ Real-time Flight Information System</h1>
-      <div className="header">
-        <input
-          type="text"
-          className="iata"
-          placeholder="Enter mmm"
-          value={iata}
-          onChange={handleIataChange}
-        />
-        <button className="refresh-btn" onClick={handleRefresh}>
-          🔄 Refresh
-        </button>
-    </div>
+      {/* Hero Header */}
+      <div className="hero-header">
+        <div className="hero-content">
+          <div className="hero-icon">✈</div>
+          <h1 className="page-title">AirLabs Flight Tracker</h1>
+          <p className="page-subtitle">Real-time arrivals & departures worldwide</p>
+        </div>
+      </div>
 
+      {/* Search Section */}
+      <div className="search-section">
+        <div className="search-card">
+          <div className="search-label">Airport IATA Code</div>
+          <div className="search-row">
+            <div className="input-wrapper">
+              <span className="input-icon">🔍</span>
+              <input
+                type="text"
+                className="iata"
+                placeholder="e.g. SGN, HAN, NRT..."
+                value={iata}
+                onChange={handleIataChange}
+                maxLength={3}
+              />
+            </div>
+            <button className="refresh-btn" onClick={handleRefresh}>
+              Search Flights
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Flight Boards */}
       <div className="container">
         <div className="board">
-          <div className="board-header">
-            <div className="status-dots">
-              <span className="dot red"></span>
-              <span className="dot yellow"></span>
-              <span className="dot green"></span>
+          <div className="board-header arrivals-header">
+            <div className="board-title">
+              <span className="board-icon">🛬</span>
+              <span>Arrivals</span>
             </div>
-            <span>📥 Arrivals - {iata || 'Select Airport'}</span>
+            <span className="board-count">{arrivals.length} flights</span>
+            <span className="board-airport">{iata || '---'}</span>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Carrier</th>
-                <th>Flight</th>
-                <th>Origin</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>{renderArrivals()}</tbody>
-          </table>
+          <div className="board-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Carrier</th>
+                  <th>Flight</th>
+                  <th>Origin</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>{renderArrivals()}</tbody>
+            </table>
+          </div>
         </div>
 
         <div className="board">
-          <div className="board-header">
-            <div className="status-dots">
-              <span className="dot red"></span>
-              <span className="dot yellow"></span>
-              <span className="dot green"></span>
+          <div className="board-header departures-header">
+            <div className="board-title">
+              <span className="board-icon">🛫</span>
+              <span>Departures</span>
             </div>
-            <span>📤 Departures - {iata || 'Select Airport'}</span>
+            <span className="board-count">{departures.length} flights</span>
+            <span className="board-airport">{iata || '---'}</span>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Carrier</th>
-                <th>Flight</th>
-                <th>Destination</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>{renderDepartures()}</tbody>
-          </table>
+          <div className="board-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Carrier</th>
+                  <th>Flight</th>
+                  <th>Destination</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>{renderDepartures()}</tbody>
+            </table>
+          </div>
         </div>
+      </div>
+
+      {/* Flight Statistics */}
+      {(arrivals.length > 0 || departures.length > 0) && (
+        <div className="stats-section">
+          <div className="stats-header">
+            <div className="stats-header-line"></div>
+            <h2 className="stats-title">Flight Analytics Dashboard</h2>
+            <div className="stats-header-line"></div>
+          </div>
+          <div className="stats-grid">
+            <div className="stat-card stat-total">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">Σ</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{arrivals.length + departures.length}</div>
+                <div className="stat-label">Total Flights</div>
+              </div>
+            </div>
+            <div className="stat-card stat-arrivals">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">↓</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{arrivals.length}</div>
+                <div className="stat-label">Arrivals</div>
+              </div>
+            </div>
+            <div className="stat-card stat-departures">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">↑</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{departures.length}</div>
+                <div className="stat-label">Departures</div>
+              </div>
+            </div>
+            <div className="stat-card stat-landed">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">●</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">
+                  {[...arrivals, ...departures].filter(f => f.status?.toLowerCase().includes('landed')).length}
+                </div>
+                <div className="stat-label">Landed</div>
+              </div>
+            </div>
+            <div className="stat-card stat-scheduled-count">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">◷</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">
+                  {[...arrivals, ...departures].filter(f => f.status?.toLowerCase().includes('scheduled')).length}
+                </div>
+                <div className="stat-label">Scheduled</div>
+              </div>
+            </div>
+            <div className="stat-card stat-enroute">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">⟿</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">
+                  {[...arrivals, ...departures].filter(f => {
+                    const s = f.status?.toLowerCase() || '';
+                    return s.includes('en-route') || s.includes('active');
+                  }).length}
+                </div>
+                <div className="stat-label">En-Route</div>
+              </div>
+            </div>
+            <div className="stat-card stat-delayed-count">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">⧗</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">
+                  {[...arrivals, ...departures].filter(f => f.status?.toLowerCase().includes('delayed')).length}
+                </div>
+                <div className="stat-label">Delayed</div>
+              </div>
+            </div>
+            <div className="stat-card stat-cancelled">
+              <div className="stat-icon-box">
+                <div className="stat-icon-symbol">✕</div>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">
+                  {[...arrivals, ...departures].filter(f => f.status?.toLowerCase().includes('cancelled')).length}
+                </div>
+                <div className="stat-label">Cancelled</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="app-footer">
+        <span>Powered by AirLabs API</span>
+        <span className="footer-dot">•</span>
+        <span>v2.0</span>
       </div>
     </div>
   );
